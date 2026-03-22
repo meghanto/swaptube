@@ -1,3 +1,11 @@
+# Fork info:
+This is a version of swaptube, where the main branch should work on windows machines. If it doesn't, please post an issue and also join the discord for collaborative troubleshooting! 
+
+If you would like to maintain this beyond a single windows machine and have it be tested and robust, please contribute! 
+
+Swaptube functionality-specific contributions should go in the main swaptube repo, this repo should take contributions that primarily focus on compatibility (Not limited to windows development! If you have a platform you'd love to run swaptube on, and have managed to get it to work there, I think this is the place for it.) 
+
+# Original Readme:
 # SwapTube
 
 This is the repository I use to render [my YouTube videos](https://www.youtube.com/@twoswap).
@@ -13,7 +21,7 @@ https://discord.gg/a786NZXYQ3
 # Compatibility
 SwapTube is developed, and is known to compile and run on several Linux distributions. MacOS and Windows are untested.
 
-There is an experimental Windows/MSVC build available in a fork: [meghanto/swaptube](https://github.com/meghanto/swaptube). It is not officially supported here, may lag behind `master`, and comes with no guarantee of ongoing maintenance.
+There is an experimental Windows/MSVC build available in a fork: [meghanto/swaptube](https://github.com/meghanto/swaptube) (you're here!). It is not officially supported here, may lag behind `master`, and comes with no guarantee of ongoing maintenance.
 
 SwapTube was originally designed to work only with CUDA, requiring an NVIDIA GPU. It should now be possible to run on AMD using HIP. This feature is new and may have errors. AMD ROCm is required if HIP is used in place of CUDA. Follow [this guide](https://rocm.docs.amd.com/projects/install-on-linux/en/latest/install/quick-start.html) to install ROCm and HIP.
 
