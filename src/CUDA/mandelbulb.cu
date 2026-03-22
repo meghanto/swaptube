@@ -4,7 +4,7 @@
 #include "common_graphics.cuh"
 #include "fractal_sdf.cuh"
 
-const float EPSILON = 2e-4f;
+#define MANDELBULB_EPSILON 2e-4f
 
 __device__ unsigned int getLighting(const Cuda::vec3& pos, const Cuda::vec3& lightPos, const Cuda::vec3& normal, float shadow, float iters, float max_raymarch_iters){
     float light = max(dot(normal, normalize(lightPos - pos)), 0.0);
@@ -27,7 +27,7 @@ __device__ Cuda::vec4 raymarch(const Cuda::vec3& ro, const Cuda::vec3& rd, float
     for(int i = 0; i < max_raymarch_iters; i++){
         r = ro + t * rd;
         d = distMap(r, max_mandelbulb_iters);
-        if(d < EPSILON){
+        if(d < MANDELBULB_EPSILON){
             return Cuda::vec4(r.x, r.y, r.z, (float) i);
         }
         t += d;
@@ -49,7 +49,7 @@ __device__ float marchLight(const Cuda::vec3& pos, const Cuda::vec3& lightPos, f
     for(int i = 0; i < max_raymarch_iters; i++){
         r = pos + t * rd;
         d = distMap(r, max_mandelbulb_iters);
-        if(d < EPSILON){
+        if(d < MANDELBULB_EPSILON){
             return 0.0;
         }
         shadow = min(shadow, d / t);
@@ -64,9 +64,9 @@ __device__ float marchLight(const Cuda::vec3& pos, const Cuda::vec3& lightPos, f
 // Approximates gradient of SDF at point to be normal of surface
 __device__ Cuda::vec3 getNormal(const Cuda::vec3& pos, int max_mandelbulb_iters){
     return normalize(Cuda::vec3(
-        distMap(pos + Cuda::vec3(EPSILON, 0, 0), max_mandelbulb_iters) - distMap(pos - Cuda::vec3(EPSILON, 0, 0), max_mandelbulb_iters),
-        distMap(pos + Cuda::vec3(0, EPSILON, 0), max_mandelbulb_iters) - distMap(pos - Cuda::vec3(0, EPSILON, 0), max_mandelbulb_iters),
-        distMap(pos + Cuda::vec3(0, 0, EPSILON), max_mandelbulb_iters) - distMap(pos - Cuda::vec3(0, 0, EPSILON), max_mandelbulb_iters)
+        distMap(pos + Cuda::vec3(MANDELBULB_EPSILON, 0, 0), max_mandelbulb_iters) - distMap(pos - Cuda::vec3(MANDELBULB_EPSILON, 0, 0), max_mandelbulb_iters),
+        distMap(pos + Cuda::vec3(0, MANDELBULB_EPSILON, 0), max_mandelbulb_iters) - distMap(pos - Cuda::vec3(0, MANDELBULB_EPSILON, 0), max_mandelbulb_iters),
+        distMap(pos + Cuda::vec3(0, 0, MANDELBULB_EPSILON), max_mandelbulb_iters) - distMap(pos - Cuda::vec3(0, 0, MANDELBULB_EPSILON), max_mandelbulb_iters)
     ));
 }
 
@@ -88,7 +88,7 @@ __global__ void runRaymarch(const int width, const int height, const Cuda::vec3 
     
     // Determines whether to color pixel
     if(iters >= 0.0){
-        float shadow = marchLight(end_pos, lightPos, 8.0 * EPSILON, max_raymarch_iters, max_mandelbulb_iters);
+        float shadow = marchLight(end_pos, lightPos, 8.0 * MANDELBULB_EPSILON, max_raymarch_iters, max_mandelbulb_iters);
         color = getLighting(end_pos, lightPos, getNormal(end_pos, max_mandelbulb_iters), shadow, iters, max_raymarch_iters);
     }else{
         color = 0xff000000;

@@ -59,24 +59,56 @@ find_windows_ffmpeg_root() {
     return 1
 }
 
-run_windows_dev_cmd() {
-    local vcvars_bat="$1"
-    local inner_cmd="$2"
-    local runner_bat=".go_windows_dev_cmd.bat"
-    {
-        echo "@echo off"
-        echo "call \"${vcvars_bat}\" >nul"
-        echo "if errorlevel 1 exit /b 1"
-        echo "${inner_cmd}"
-        echo "exit /b %errorlevel%"
-    } > "${runner_bat}"
-
+run_windows_batch_file() {
+    local runner_bat="$1"
     local runner_win
-    runner_win="$(cygpath -w "${runner_bat}")"
-    powershell.exe -NoProfile -Command "& '${runner_win}'; exit \$LASTEXITCODE"
+    runner_win="$(cygpath -m "${runner_bat}")"
+    MSYS2_ARG_CONV_EXCL='*' cmd.exe /C "${runner_win}"
     local rc=$?
     rm -f "${runner_bat}"
     return $rc
+}
+
+run_windows_dev_pipeline() {
+    local vcvars_bat="$1"
+    local build_dir_win="$2"
+    local runtime_dirs="$3"
+    local cmake_args="$4"
+    local build_jobs="$5"
+    local skip_smoketest="$6"
+    local skip_render="$7"
+    local video_width="$8"
+    local video_height="$9"
+    local framerate="${10}"
+    local samplerate="${11}"
+
+    local runner_bat=".go_windows_pipeline.bat"
+    {
+        echo "@echo off"
+        echo "setlocal"
+        echo "call \"${vcvars_bat}\" >nul"
+        echo "if errorlevel 1 exit /b 1"
+        if [ -n "${runtime_dirs}" ]; then
+            echo "set \"PATH=${runtime_dirs}%PATH%\""
+        fi
+        echo "cd /d \"${build_dir_win}\""
+        echo "if errorlevel 1 exit /b 1"
+        echo "cmake -G Ninja .. -DCMAKE_BUILD_TYPE=Release -DPROJECT_NAME_MACRO=${PROJECT_NAME} -DAUDIO_HINTS=${AUDIO_HINTS} -DAUDIO_SFX=${AUDIO_SFX} ${cmake_args}"
+        echo "if errorlevel 1 exit /b 1"
+        echo "ninja -j${build_jobs}"
+        echo "if errorlevel 1 exit /b 1"
+        if [ "${skip_smoketest}" -eq 0 ]; then
+            echo "swaptube.exe 160 90 ${framerate} ${samplerate} smoketest"
+            echo "if errorlevel 1 exit /b 2"
+        fi
+        if [ "${skip_render}" -eq 0 ]; then
+            echo "swaptube.exe ${video_width} ${video_height} ${framerate} ${samplerate} render"
+            echo "if errorlevel 1 exit /b 2"
+        fi
+        echo "exit /b 0"
+    } > "${runner_bat}"
+
+    run_windows_batch_file "${runner_bat}"
 }
 
 # Check for required commands
@@ -235,6 +267,7 @@ echo "go.sh: Building project ${PROJECT_NAME} with output folder name ${OUTPUT_F
             echo "go.sh: Unable to locate vcvars64.bat. Install Visual Studio Build Tools with C++ workload."
             exit 1
         fi
+        BUILD_DIR_WIN="$(cygpath -w "$PWD")"
         WINDOWS_RUNTIME_DIRS=""
         WINDOWS_CMAKE_ARGS="-DCMAKE_CXX_COMPILER=cl.exe"
         MSYS2_ROOT_HINT="$(find_windows_msys2_root || true)"
@@ -250,88 +283,88 @@ echo "go.sh: Building project ${PROJECT_NAME} with output folder name ${OUTPUT_F
             echo "go.sh: Using FFMPEG_ROOT=${FFMPEG_ROOT_HINT}"
         fi
         echo "go.sh: Bootstrapping MSVC toolchain via $VCVARS64_BAT"
-        run_windows_dev_cmd "$VCVARS64_BAT" "cmake -G Ninja .. -DCMAKE_BUILD_TYPE=Release -DPROJECT_NAME_MACRO=${PROJECT_NAME} -DAUDIO_HINTS=${AUDIO_HINTS} -DAUDIO_SFX=${AUDIO_SFX} ${WINDOWS_CMAKE_ARGS}"
     else
         # Pass the variables to CMake as options
         cmake -G Ninja .. -DCMAKE_BUILD_TYPE=Release -DPROJECT_NAME_MACRO="${PROJECT_NAME}" -DAUDIO_HINTS="${AUDIO_HINTS}" -DAUDIO_SFX="${AUDIO_SFX}"
-    fi
-
-    echo "go.sh: Compiling..."
-    if [ $is_windows_msys -eq 1 ]; then
-        run_windows_dev_cmd "$VCVARS64_BAT" "ninja -j${BUILD_JOBS}"
-    else
         # build the project
-        ninja -j"${BUILD_JOBS}"
     fi
-
-    # Check if the build was successful
-    if [ $? -ne 0 ]; then
-        echo "go.sh: Build failed. Please check the build errors."
-        exit 1
-    fi
-
-    echo "==============================================="
-    echo "===================== RUN ====================="
-    echo "==============================================="
-
-    # Wire io paths for renderer input/output.
     if [ $is_windows_msys -eq 1 ]; then
         # Avoid Windows symlink/junction edge cases under Git Bash.
         rm -rf io_out io_in
         mkdir -p io_out/frames io_in
         cp -rf "../${INPUT_DIR}/." io_in/
+        RESULT=0
+        run_windows_dev_pipeline \
+            "$VCVARS64_BAT" \
+            "$BUILD_DIR_WIN" \
+            "$WINDOWS_RUNTIME_DIRS" \
+            "$WINDOWS_CMAKE_ARGS" \
+            "$BUILD_JOBS" \
+            "$SKIP_SMOKETEST" \
+            "$SKIP_RENDER" \
+            "$VIDEO_WIDTH" \
+            "$VIDEO_HEIGHT" \
+            "$FRAMERATE" \
+            "$SAMPLERATE"
+        RESULT=$?
+        if [ $RESULT -eq 1 ]; then
+            echo "go.sh: Build failed. Please check the build errors."
+            exit 1
+        fi
+        if [ $RESULT -eq 2 ]; then
+            echo "go.sh: Execution failed."
+            exit 2
+        fi
     else
+        echo "go.sh: Compiling..."
+        ninja -j"${BUILD_JOBS}"
+
+        # Check if the build was successful
+        if [ $? -ne 0 ]; then
+            echo "go.sh: Build failed. Please check the build errors."
+            exit 1
+        fi
+
+        echo "==============================================="
+        echo "===================== RUN ====================="
+        echo "==============================================="
+
         rm -rf io_out
         ln -s "../${OUTPUT_DIR}" io_out
         rm -rf io_in
         ln -s "../${INPUT_DIR}" io_in
-    fi
 
-    # We redirect stderr to null since FFMPEG's encoder libraries tend to dump all sorts of junk there.
-    # Swaptube errors are printed to stdout.
+        # We redirect stderr to null since FFMPEG's encoder libraries tend to dump all sorts of junk there.
+        # Swaptube errors are printed to stdout.
 
-    # Smoketest
-    if [ $SKIP_SMOKETEST -eq 0 ]; then
-        if [ $is_windows_msys -eq 1 ]; then
-            WINDOWS_RUNTIME_PREFIX=""
-            if [ -n "$WINDOWS_RUNTIME_DIRS" ]; then
-                WINDOWS_RUNTIME_PREFIX="set \"PATH=${WINDOWS_RUNTIME_DIRS}%PATH%\" && "
-            fi
-            run_windows_dev_cmd "$VCVARS64_BAT" "${WINDOWS_RUNTIME_PREFIX}swaptube.exe 160 90 ${FRAMERATE} ${SAMPLERATE} smoketest"
-        else
+        # Smoketest
+        if [ $SKIP_SMOKETEST -eq 0 ]; then
             "$SWAPTUBE_BIN" 160 90 $FRAMERATE $SAMPLERATE smoketest
+            SWAPTUBE_STATUS=$?
+            echo "go.sh: Smoketest exit code ${SWAPTUBE_STATUS}"
+            if [ $SWAPTUBE_STATUS -ne 0 ]; then
+                echo "go.sh: Execution failed in smoketest."
+                exit 2
+            fi
         fi
-        SWAPTUBE_STATUS=$?
-        echo "go.sh: Smoketest exit code ${SWAPTUBE_STATUS}"
-        if [ $SWAPTUBE_STATUS -ne 0 ]; then
-            echo "go.sh: Execution failed in smoketest."
-            exit 2
+
+        # True render
+        if [ $SKIP_RENDER -eq 0 ]; then
+            # Clear all files from the smoketest
+            rm io_out/* -rf
+            mkdir -p io_out/frames
+            "$SWAPTUBE_BIN" $VIDEO_WIDTH $VIDEO_HEIGHT $FRAMERATE $SAMPLERATE render
+            SWAPTUBE_STATUS=$?
+            echo "go.sh: Render exit code ${SWAPTUBE_STATUS}"
+            if [ $SWAPTUBE_STATUS -ne 0 ]; then
+                echo "go.sh: Execution failed in render."
+                exit 2
+            fi
         fi
     fi
 
-    # True render
-    if [ $SKIP_RENDER -eq 0 ]; then
-        # Clear all files from the smoketest
-        rm io_out/* -rf
-        mkdir -p io_out/frames
-        if [ $is_windows_msys -eq 1 ]; then
-            WINDOWS_RUNTIME_PREFIX=""
-            if [ -n "$WINDOWS_RUNTIME_DIRS" ]; then
-                WINDOWS_RUNTIME_PREFIX="set \"PATH=${WINDOWS_RUNTIME_DIRS}%PATH%\" && "
-            fi
-            run_windows_dev_cmd "$VCVARS64_BAT" "${WINDOWS_RUNTIME_PREFIX}swaptube.exe ${VIDEO_WIDTH} ${VIDEO_HEIGHT} ${FRAMERATE} ${SAMPLERATE} render"
-        else
-            "$SWAPTUBE_BIN" $VIDEO_WIDTH $VIDEO_HEIGHT $FRAMERATE $SAMPLERATE render
-        fi
-        SWAPTUBE_STATUS=$?
-        echo "go.sh: Render exit code ${SWAPTUBE_STATUS}"
-        if [ $SWAPTUBE_STATUS -ne 0 ]; then
-            echo "go.sh: Execution failed in render."
-            exit 2
-        fi
-        if [ $is_windows_msys -eq 1 ]; then
-            cp -rf io_out/. "../${OUTPUT_DIR}/"
-        fi
+    if [ $is_windows_msys -eq 1 ] && [ $SKIP_RENDER -eq 0 ]; then
+        cp -rf io_out/. "../${OUTPUT_DIR}/"
     fi
 
     exit 0
