@@ -2,7 +2,9 @@ cmake_minimum_required(VERSION 3.24)
 project(swaptube LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CUDA_STANDARD 14)
+message(STATUS "C++ standard set to ${CMAKE_CXX_STANDARD}")
 
 if(MSVC)
     add_compile_options("$<$<COMPILE_LANGUAGE:CXX>:/EHsc>")
@@ -65,7 +67,31 @@ elseif(CMAKE_HIP_COMPILER)
     enable_language(HIP)
     message(STATUS "HIP compiler found: ${CMAKE_HIP_COMPILER}")
     set(CMAKE_HIP_STANDARD 17)
-    file(GLOB_RECURSE GPU_SOURCES "src/HIP/*.cu")
+    set(CMAKE_HIP_STANDARD_REQUIRED ON)
+    set(CMAKE_HIP_ARCHITECTURES native)
+    find_program(HIPIFY_PERL hipify-perl REQUIRED)
+    file(GLOB_RECURSE CUDA_TO_TRANSLATE CONFIGURE_DEPENDS "src/CUDA/*.cu" "src/CUDA/*.cuh")
+    foreach(cuda_file ${CUDA_TO_TRANSLATE})
+        file(RELATIVE_PATH rel_path "${CMAKE_SOURCE_DIR}/src/CUDA" "${cuda_file}")
+        set(hip_file "${CMAKE_SOURCE_DIR}/src/HIP/${rel_path}")
+        get_filename_component(hip_dir "${hip_file}" DIRECTORY)
+        add_custom_command(
+            OUTPUT ${hip_file}
+            COMMAND ${CMAKE_COMMAND} -E make_directory "${hip_dir}"
+            COMMAND echo "Hipifying ${rel_path}"
+            COMMAND ${HIPIFY_PERL} ${cuda_file} > ${hip_file}
+            DEPENDS ${cuda_file}
+            VERBATIM
+        )
+        if(${hip_file} MATCHES ".*\\.cuh$")
+            list(APPEND HIP_HEADERS ${hip_file})
+        elseif(${hip_file} MATCHES ".*\\.cu$")
+            list(APPEND GPU_SOURCES ${hip_file})
+        endif()
+    endforeach()
+    if(HIP_HEADERS)
+        add_custom_target(convert_headers ALL DEPENDS ${HIP_HEADERS})
+    endif()
     set_source_files_properties(${GPU_SOURCES} PROPERTIES LANGUAGE HIP)
     set(SWAPTUBE_USE_HIP ON)
 else()
@@ -316,6 +342,7 @@ add_executable(${PROJECT_NAME}
 if(SWAPTUBE_USE_CUDA)
     set_property(TARGET ${PROJECT_NAME} PROPERTY CUDA_ARCHITECTURES OFF)
 endif()
+message(STATUS "Executable target ${PROJECT_NAME} added")
 
 target_compile_definitions(${PROJECT_NAME} PRIVATE
     PROJECT_NAME_MACRO="${PROJECT_NAME_MACRO}"
