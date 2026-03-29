@@ -118,6 +118,9 @@ run_windows_dev_pipeline() {
             echo "if errorlevel 1 exit /b 2"
         fi
         if [ "${skip_render}" -eq 0 ]; then
+            echo "del /Q io_out\\* >nul 2>&1"
+            echo "if exist io_out\\frames rmdir /S /Q io_out\\frames >nul 2>&1"
+            echo "mkdir io_out\\frames >nul 2>&1"
             echo "swaptube.exe ${video_width} ${video_height} ${framerate} ${samplerate} render"
             echo "if errorlevel 1 exit /b 2"
         fi

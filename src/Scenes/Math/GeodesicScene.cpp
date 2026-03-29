@@ -70,6 +70,8 @@ GeodesicScene::GeodesicScene(const vec2& dimensions)
         {"space_z", "(c)"},
         {"space_w", "0"},
 
+        {"subscreen_size", "0.5"},
+
 // Raymarching Stuff
         {"pov_x", "0"},
         {"pov_y", "0"},
@@ -94,10 +96,6 @@ GeodesicScene::GeodesicScene(const vec2& dimensions)
         {"geodesics_count", "1"},
         {"geodesics_steps", "0"},
         {"geodesics_spread_angle", "pi 2 /"},
-        {"geodesics_start_u", "0.0"},
-        {"geodesics_start_v", "0.0"},
-        {"geodesics_start_du", "1.0"},
-        {"geodesics_start_dv", "0.0"},
         {"geodesics_opacity", "1.0"},
     });
 }
@@ -169,9 +167,10 @@ void GeodesicScene::draw_manifold(
         (int)(1500 * steps_mult),
     };
 
+    float mult_factor = state["subscreen_size"];
+
     if(state["manifold_opacity"] >= 0.01f) {
-        int div_factor = 2;
-        Pixels manifold_pix(pix.w / div_factor, pix.h / div_factor);
+        Pixels manifold_pix(pix.w * mult_factor, pix.h * mult_factor);
         ManifoldData manifolds[] = { manifold1 };
         cuda_render_manifold(
             manifold_pix.pixels.data(),
@@ -199,10 +198,11 @@ void GeodesicScene::draw_manifold(
     int geodesic_steps = (int)state["geodesics_steps"];
     double geodesics_opacity = state["geodesics_opacity"];
     if(num_geodesics > 0 && geodesic_steps > 0 && geodesics_opacity >= 0.01f) {
-        Pixels geodesic_pix(pix.w, pix.h);
+        Pixels geodesic_pix(pix.w * mult_factor, pix.h * mult_factor);
         vec2 start_position = vec2(state["pov_x"], state["pov_z"]);
-        vec2 start_velocity = vec2(state["pov_q1"], state["pov_qj"]);
-        start_velocity = normalize(start_velocity);
+        vec3 camera_dir_3d = rotate_vector(vec3(0, 0, 1), conjugate(camera_direction));
+        vec2 start_velocity = vec2(camera_dir_3d.x, camera_dir_3d.z);
+        start_velocity = 0.005 * normalize(start_velocity);
         cuda_render_geodesics_2d(
             geodesic_pix.pixels.data(),
             geodesic_pix.w, geodesic_pix.h,
@@ -219,7 +219,7 @@ void GeodesicScene::draw_manifold(
         cuda_overlay(
             pix.pixels.data(), pix.w, pix.h,
             geodesic_pix.pixels.data(), geodesic_pix.w, geodesic_pix.h,
-            0, 0,
+            pix.w - geodesic_pix.w, pix.h - geodesic_pix.h,
             1.0f
         );
     }
@@ -241,6 +241,8 @@ void GeodesicScene::draw() {
 const StateQuery GeodesicScene::populate_state_query() const {
     StateQuery sq = {
         "space_x", "space_y", "space_z", "space_w",
+
+        "subscreen_size",
 
         "pov_x", "pov_y", "pov_z",
         "pov_q1", "pov_qi", "pov_qj", "pov_qk",

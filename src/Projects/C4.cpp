@@ -22,10 +22,9 @@
 #include "../Scenes/Physics/BouncingBallScene.h"
 
 // TODO LATER tromp's questions
-// TODO LATER we can compress under 70kb
-// TODO LATER make anki deck
 // TODO LATER I should really make a manager.undo function...
 // TODO Thumbnail
+// TODO Candlesticks opening first introduction - dont jump away
 
 double find_node_id_from_board(shared_ptr<Graph> g, C4Board& b) {
     double start_node_id = b.get_hash();
@@ -45,7 +44,7 @@ void flood_fill_edges_to_highlight(shared_ptr<Graph> g, C4Board& b, shared_ptr<C
     for (auto& pair : g->nodes) {
         Node& node = pair.second;
         for (const Edge& edge : node.neighbors) {
-            const_cast<Edge&>(edge).opacity = 0.1;
+            const_cast<Edge&>(edge).opacity = 0.07;
         }
     }
 
@@ -144,7 +143,7 @@ void preintro(CompositeScene& cs) {
     cs.render_microblock();
 
     variation = "426566454465564522224215";
-    gs->manager.transition(MACRO, {{"d", ".25"}, {"qj", ".6"}});
+    gs->manager.transition(MACRO, {{"d", ".25"}, {"qj", "-.6"}});
     stage_macroblock(FileBlock("Some are long and convoluted, but don't have much room for deviation, like this long, unbranching line."), variation.size());
     for(char c : variation) {
         string move(1, c);
@@ -361,8 +360,8 @@ void intro(CompositeScene& cs) {
     cs.fade_subscene(MICRO, "god2", 0);
     shared_ptr<PngScene> human1 = make_shared<PngScene>("Thinker1", vec2(.3, .6));
     shared_ptr<PngScene> human2 = make_shared<PngScene>("Thinker2", vec2(.3, .6));
-    cs.add_scene(human1, "human1", vec2(.15, 1.7));
-    cs.add_scene(human2, "human2", vec2(.85, 1.7));
+    cs.add_scene(human1, "human1", vec2(.12, 1.7));
+    cs.add_scene(human2, "human2", vec2(.88, 1.7));
     cs.slide_subscene(MICRO, "human1", vec2(0, -1));
     cs.slide_subscene(MICRO, "human2", vec2(0, -1));
     cs.render_microblock();
@@ -378,7 +377,7 @@ void intro(CompositeScene& cs) {
     cs.render_microblock();
     c4s->play("2");
     shared_ptr<PngScene> human2_trick = make_shared<PngScene>("Thinker2_trick", vec2(.3, .6));
-    cs.add_scene_fade_in(MICRO, human2_trick, "human2_trick", vec2(.85, .7));
+    cs.add_scene_fade_in(MICRO, human2_trick, "human2_trick", vec2(.88, .7));
     cs.render_microblock();
     cs.render_microblock();
     c4s->undo(1);
@@ -449,7 +448,7 @@ void build_graph(CompositeScene& cs) {
     cs.render_microblock();
 
     gs->manager.transition(MICRO, {{"q1", "1"}, {"qi", "{t} 3 / cos"}, {"qj", "{t} 3 / sin"}, {"qk", "0"}});
-    gs->manager.transition(MICRO, {{"x", "10"}, {"y", "8"}, {"z", "3"}});
+    gs->manager.transition(MICRO, {{"x", "84"}, {"y", "88"}, {"z", "80"}});
     stage_macroblock(FileBlock("Because instead of relying on brute force search, I found a profoundly simpler way to play perfect connect 4. All it takes is this graph."), 1);
     cs.render_microblock();
 
@@ -620,17 +619,16 @@ void explanation(CompositeScene& cs) {
 
     shared_ptr<LineChartScene> lcs = make_shared<LineChartScene>();
     stage_macroblock(SilenceBlock(1), 1);
-    cs.fade_all_subscenes(MICRO, 0);
-    cs.add_scene_fade_in(MICRO, lcs, "lcs");
     cs.render_microblock();
-    cs.remove_all_subscenes_except("lcs");
 
     shared_ptr<C4Scene> quick_display = make_shared<C4Scene>("", vec2(.5, .5));
-    cs.add_scene_fade_in(MICRO, quick_display, "quick_display", vec2(.25, .2));
     quick_display->set_fast_mode(true);
-
     stage_macroblock(FileBlock("The amount of positions to memorize up to a certain depth grows really fast."), 1);
+    cs.fade_all_subscenes(MICRO, 0);
+    cs.add_scene_fade_in(MICRO, quick_display, "quick_display", vec2(.25, .2));
     cs.render_microblock();
+    cs.remove_all_subscenes_except("quick_display");
+    cs.add_scene_fade_in(MICRO, lcs, "lcs");
 
     g->clear();
     shared_ptr<C4GraphScene> num_moves_tracker = make_shared<C4GraphScene>(g, false, "", FULL, vec2(.8, .8));
@@ -1170,9 +1168,11 @@ void patterned(CompositeScene& cs) {
     cs.remove_subscene("compressible");
     cs.render_microblock();
 
-    cs.remove_subscene("ps");
+    ps->manager.set({{"timer", "1"}});
     stage_macroblock(FileBlock("The answer is... all of them!"), 6);
+    cs.fade_subscene(MICRO, "ps", 0);
     cs.render_microblock();
+    cs.remove_subscene("ps");
     cs.render_microblock();
     cs.render_microblock();
     c4gs_weak_r->manager.transition(MICRO, "d", "1.2");
@@ -1359,9 +1359,12 @@ void patterned(CompositeScene& cs) {
 
     shared_ptr<PauseScene> ps_2 = make_shared<PauseScene>();
     cs.add_scene(ps_2, "ps_2");
-    stage_macroblock(CompositeBlock(
-                FileBlock("Try and figure out what Red should do next, according to the rules."),
-                SilenceBlock(2)), 1);
+    stage_macroblock(CompositeBlock(FileBlock("Try and figure out what Red should do next, according to the rules."), SilenceBlock(1.5)), 1);
+    cs.render_microblock();
+
+    stage_macroblock(SilenceBlock(.5), 1);
+    ps_2->manager.set({{"timer", "1"}});
+    cs.fade_subscene(MICRO, "ps_2", 0);
     cs.render_microblock();
     cs.remove_subscene("ps_2");
 
@@ -1535,17 +1538,17 @@ void trimmed_solution(CompositeScene& cs) {
     cs.render_microblock();
 
     stage_macroblock(FileBlock("This is just the compressed subgraph resulting from one particular leaf node."), 2);
-    weakc4->manager.transition(MICRO, "d", ".25");
+    weakc4->manager.transition(MICRO, "d", ".35");
     cs.render_microblock();
     cs.render_microblock();
 
     stage_macroblock(FileBlock("Imagine having to memorize those subtrees for every single leaf node on the graph!"), 2);
+    b = C4Board(FULL, "");
+    weakc4->next_hash = b.get_hash();
     cs.render_microblock();
     weakc4->manager.transition(MICRO, "d", ".9");
     cs.render_microblock();
 
-    b = C4Board(FULL, "");
-    weakc4->next_hash = b.get_hash();
     reset_graph_edge_opacities(g);
     g->remove_node(node_id); // remove so we can regrow it
     g->add_to_stack(new C4Board(C4BranchMode::FULL, variation));
@@ -2046,7 +2049,7 @@ void ideas(CompositeScene& cs, shared_ptr<C4GraphScene> weakc4) {
     bbs->manager.transition(MACRO, "zoom", "-3");
     cs.render_microblock();
     cs.render_microblock();
-    shared_ptr<Mp4Scene> cumulonimbus = make_shared<Mp4Scene>(vector<string>{"cumulonimbus"}, 1, Mp4EndBehavior::Loop, vec2(6, 6));
+    shared_ptr<Mp4Scene> cumulonimbus = make_shared<Mp4Scene>(vector<string>{"cumulonimbus"}, 1, Mp4EndBehavior::Loop, vec2(5, 5));
     cumulonimbus->manager.transition(MICRO, {{"w", "1"}, {"h", "1"}});
     cs.add_scene_fade_in(MICRO, cumulonimbus, "cumulonimbus");
     cs.render_microblock();
@@ -2072,7 +2075,7 @@ void ideas(CompositeScene& cs, shared_ptr<C4GraphScene> weakc4) {
     cs.render_microblock();
 
     stage_macroblock(FileBlock("Clouds are best described not in the language of particle interations,"), 1);
-    cumulonimbus->manager.transition(MICRO, {{"w", "6"}, {"h", "6"}});
+    cumulonimbus->manager.transition(MICRO, {{"w", "5"}, {"h", "5"}});
     cs.fade_all_subscenes(MICRO, 0);
     cs.add_scene_fade_in(MICRO, bbs, "bbs");
     bbs->manager.transition(MACRO, "zoom", "0");
@@ -2306,7 +2309,6 @@ void sponsor(CompositeScene& cs) {
 
 void render_video() {
     CompositeScene cs;
-    /*
     preintro(cs);
     intro(cs);
     build_graph(cs);
@@ -2318,6 +2320,5 @@ void render_video() {
     solution_types(cs, weakc4);
     ideas(cs, weakc4);
     anki(cs);
-    */
     sponsor(cs);
 }
