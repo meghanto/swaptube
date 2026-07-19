@@ -377,6 +377,7 @@ if(SWAPTUBE_USE_CUDA)
             $<$<COMPILE_LANGUAGE:CUDA>:
                 --expt-relaxed-constexpr
                 -Xcudafe --diag_suppress=20012
+                -Xcompiler=/Zc:preprocessor
             >
         )
     endif()
