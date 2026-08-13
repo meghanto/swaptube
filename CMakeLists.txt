@@ -24,13 +24,6 @@ if(NOT DEFINED AUDIO_SFX)
     set(AUDIO_SFX 0 CACHE STRING "Enable audio SFX streams")
 endif()
 
-# RULE_LAUNCH_* is injected as a command string rather than an argv list, so
-# CMake's executable path must be quoted explicitly on Windows (Visual Studio's
-# bundled CMake lives below "Program Files (x86)").
-set(SWAPTUBE_TIMED_COMMAND "\"${CMAKE_COMMAND}\" -E time")
-set_property(GLOBAL PROPERTY RULE_LAUNCH_COMPILE "${SWAPTUBE_TIMED_COMMAND}")
-set_property(GLOBAL PROPERTY RULE_LAUNCH_LINK "${SWAPTUBE_TIMED_COMMAND}")
-
 include(CheckLanguage)
 message(STATUS "Checking for CUDA and HIP support...")
 check_language(CUDA)
