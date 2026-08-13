@@ -90,7 +90,7 @@ elseif((CMAKE_CUDA_COMPILER AND NOT COMPUTE_LANG) OR (COMPUTE_LANG STREQUAL "CUD
             if(CMAKE_CUDA_COMPILER_VERSION VERSION_GREATER_EQUAL 13.0)
                 set(_swaptube_default_cuda_arch "60")
             else()
-                set(_swaptube_default_cuda_arch "50")
+                set(_swaptube_default_cuda_arch "52")
             endif()
             set(SWAPTUBE_CUDA_ARCH "${_swaptube_default_cuda_arch}" CACHE STRING "CUDA compute capability target used for nvcc gencode flags")
         endif()
@@ -405,7 +405,6 @@ if(SWAPTUBE_USE_CUDA)
         target_compile_options(${PROJECT_NAME} PRIVATE
             $<$<COMPILE_LANGUAGE:CUDA>:
                 -gencode=arch=compute_${SWAPTUBE_CUDA_ARCH},code=sm_${SWAPTUBE_CUDA_ARCH}
-                -gencode=arch=compute_${SWAPTUBE_CUDA_ARCH},code=compute_${SWAPTUBE_CUDA_ARCH}
                 --expt-relaxed-constexpr
                 -Xcudafe --diag_suppress=20012
             >
