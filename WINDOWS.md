@@ -113,6 +113,24 @@ pacman -S --needed \
   mingw-w64-x86_64-libpng
 ```
 
+SwapTube records the graphics/runtime versions validated by the native Windows
+build in `windows-msys2.lock`. Because MSYS2 is a rolling distribution,
+`go.ps1` checks the installed packages against that file and stops on a version
+mismatch. To install the exact locked packages from MSYS2's official archive,
+run this from **MSYS2 MSYS** in the SwapTube directory:
+
+```bash
+mapfile -t locked_packages < <(
+  awk '!/^#/ && NF == 2 {
+    printf "https://repo.msys2.org/mingw/mingw64/%s-%s-any.pkg.tar.zst\n", $1, $2
+  }' windows-msys2.lock
+)
+pacman -U --needed "${locked_packages[@]}"
+```
+
+Do not run `pacman -Syu` afterward without also updating and validating the
+lock file; doing so may replace the locked packages with newer rolling builds.
+
 `go.ps1` detects the selected MSYS2 installation and supplies its `mingw64`
 prefix to CMake. Do not add the general MSYS2 include directory to MSVC
 manually.

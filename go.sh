@@ -64,6 +64,29 @@ find_windows_msys2_root() {
     return 1
 }
 
+verify_windows_msys2_lock() {
+    local msys2_root="$1"
+    local lock_file="../windows-msys2.lock"
+    local pacman_exe="${msys2_root}/usr/bin/pacman.exe"
+    local package version installed_version
+    local failed=0
+
+    if [ ! -f "$lock_file" ] || [ ! -x "$pacman_exe" ]; then
+        echo "go.sh: Unable to verify windows-msys2.lock."
+        return 1
+    fi
+    while read -r package version; do
+        [ -z "$package" ] && continue
+        case "$package" in \#*) continue ;; esac
+        installed_version="$($pacman_exe -Q "$package" 2>/dev/null | awk '{print $2}')"
+        if [ "$installed_version" != "$version" ]; then
+            echo "go.sh: $package requires $version, found ${installed_version:-not-installed}."
+            failed=1
+        fi
+    done < "$lock_file"
+    return $failed
+}
+
 find_windows_ffmpeg_root() {
     local c
     for c in /c/ProgramData/chocolatey/lib/ffmpeg-shared/tools/* "$HOME/scoop/apps/ffmpeg-shared/current"; do
@@ -320,6 +343,7 @@ echo "go.sh: Building project ${PROJECT_NAME} with output folder name ${OUTPUT_F
         fi
         MSYS2_ROOT_HINT="$(find_windows_msys2_root || true)"
         if [ -n "$MSYS2_ROOT_HINT" ]; then
+            verify_windows_msys2_lock "$MSYS2_ROOT_HINT" || exit 1
             WINDOWS_CMAKE_ARGS="${WINDOWS_CMAKE_ARGS} -DMSYS2_ROOT=\"${MSYS2_ROOT_HINT}\""
             WINDOWS_RUNTIME_DIRS="${WINDOWS_RUNTIME_DIRS}$(cygpath -w "${MSYS2_ROOT_HINT}/mingw64/bin" | tr -d '\r');"
             echo "go.sh: Using MSYS2_ROOT=${MSYS2_ROOT_HINT}"

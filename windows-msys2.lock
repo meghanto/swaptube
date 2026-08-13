@@ -1,0 +1,11 @@
+# Packages validated with the native Windows MSVC build.
+mingw-w64-x86_64-glib2 2.86.4-1
+mingw-w64-x86_64-cairo 1.18.4-4
+mingw-w64-x86_64-librsvg 2.62.0-1
+mingw-w64-x86_64-gdk-pixbuf2 2.44.5-1
+mingw-w64-x86_64-libpng 1.6.55-1
+mingw-w64-x86_64-xz 5.8.2-1
+mingw-w64-x86_64-gcc-libs 15.2.0-13
+mingw-w64-x86_64-zlib 1.3.2-2
+mingw-w64-x86_64-libiconv 1.18-1
+mingw-w64-x86_64-gettext-runtime 1.0-1

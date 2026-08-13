@@ -145,6 +145,39 @@ function Find-Msys2Root {
     return $null
 }
 
+function Assert-Msys2PackageLock([string]$Msys2Root) {
+    $lockPath = Join-Path $repoRoot 'windows-msys2.lock'
+    $pacman = Join-Path $Msys2Root 'usr\bin\pacman.exe'
+    if (-not (Test-Path -LiteralPath $lockPath -PathType Leaf)) {
+        throw "Missing Windows dependency lock file: $lockPath"
+    }
+    if (-not (Test-Path -LiteralPath $pacman -PathType Leaf)) {
+        throw "Unable to verify MSYS2 dependency versions because pacman.exe was not found at $pacman"
+    }
+
+    $mismatches = @()
+    foreach ($line in Get-Content -LiteralPath $lockPath) {
+        $entry = $line.Trim()
+        if (-not $entry -or $entry.StartsWith('#')) { continue }
+        $parts = $entry -split '\s+'
+        if ($parts.Count -ne 2) { throw "Invalid entry in ${lockPath}: $entry" }
+
+        $installed = & $pacman -Q $parts[0] 2>$null
+        if ($LASTEXITCODE -ne 0 -or -not $installed) {
+            $mismatches += "$($parts[0]): required $($parts[1]), not installed"
+            continue
+        }
+        $installedVersion = ($installed -split '\s+')[-1]
+        if ($installedVersion -ne $parts[1]) {
+            $mismatches += "$($parts[0]): required $($parts[1]), found $installedVersion"
+        }
+    }
+
+    if ($mismatches.Count -gt 0) {
+        throw "MSYS2 dependency versions do not match windows-msys2.lock:`n  $($mismatches -join "`n  ")`nSee WINDOWS.md for the exact installation command."
+    }
+}
+
 function Find-FfmpegRoot {
     $userProfilePath = [Environment]::GetFolderPath('UserProfile')
     $candidates = @()
@@ -243,6 +276,7 @@ try {
     $cmakeArgs = @('-G', 'Ninja', '..', '-DCMAKE_BUILD_TYPE=Release', "-DCMAKE_CXX_COMPILER=$cxxCompiler", "-DCOMPUTE_LANG=$ComputeLang")
     $msys2Root = Find-Msys2Root
     if ($msys2Root) {
+        Assert-Msys2PackageLock $msys2Root
         $cmakeArgs += "-DMSYS2_ROOT=$msys2Root"
         $env:PATH = "$(Join-Path $msys2Root 'mingw64\bin');$env:PATH"
     }
