@@ -311,7 +311,10 @@ echo "go.sh: Building project ${PROJECT_NAME} with output folder name ${OUTPUT_F
         fi
         BUILD_DIR_WIN="$(cygpath -w "$PWD")"
         WINDOWS_RUNTIME_DIRS=""
-        WINDOWS_CMAKE_ARGS=""
+        # vcvars64.bat puts the selected MSVC compiler first. Resolve its full
+        # path inside the batch process so CMake's cached compiler value stays
+        # stable across incremental builds.
+        WINDOWS_CMAKE_ARGS="-DCMAKE_CXX_COMPILER=\"%VCToolsInstallDir%bin\\Hostx64\\x64\\cl.exe\""
         if [ -n "${COMPUTE_LANG}" ]; then
             WINDOWS_CMAKE_ARGS="${WINDOWS_CMAKE_ARGS} -DCOMPUTE_LANG=${COMPUTE_LANG}"
         fi
