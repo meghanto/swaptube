@@ -224,6 +224,7 @@ $temporaryProjectCopied = $false
 
 New-Item -ItemType Directory -Force -Path (Join-Path $outputDir 'frames'), (Join-Path $inputDir 'latex'), $buildDir | Out-Null
 Copy-Item -LiteralPath $projectMatches[0].FullName -Destination $activeProject -Force
+[System.IO.File]::SetLastWriteTimeUtc($activeProject, [DateTime]::UtcNow)
 $temporaryProjectCopied = $true
 
 try {
