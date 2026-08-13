@@ -34,20 +34,6 @@ static bool terminal_preview_enabled() {
     return quiet == nullptr || quiet[0] == '\0' || string(quiet) == "0";
 }
 
-#if defined(USE_NVIDIA)
-extern "C" int cuda_diagnostic_sync(char* error_message, size_t error_message_size);
-
-static void check_cuda_boundary(const char* boundary) {
-    const char* diagnostics = std::getenv("SWAPTUBE_CUDA_DIAGNOSTICS");
-    if (diagnostics == nullptr || diagnostics[0] == '\0' || string(diagnostics) == "0") return;
-
-    char error_message[256] = {};
-    if (cuda_diagnostic_sync(error_message, sizeof(error_message)) != 0) {
-        throw runtime_error(string("CUDA failure ") + boundary + ": " + error_message);
-    }
-}
-#endif
-
 extern "C" void preprocess_argb_to_p010(
     const uint32_t* d_argb,
     uint16_t* d_y_plane,
@@ -321,10 +307,6 @@ VideoWriter::VideoWriter(AVFormatContext *fc_, const string& video_path, int vid
 void VideoWriter::add_frame(uint32_t* device_pixels) {
     bool live = rendering_on();
 
-    #if defined(USE_NVIDIA)
-    check_cuda_boundary("before encoder preprocessing");
-    #endif
-
     static auto last_print_time = chrono::steady_clock::time_point::min();
     auto now = chrono::steady_clock::now();
     if(terminal_preview_enabled() &&
@@ -424,10 +406,6 @@ void VideoWriter::add_frame(uint32_t* device_pixels) {
                 get_video_background_color()
         );
     }
-
-    #if defined(USE_NVIDIA)
-    check_cuda_boundary("after encoder preprocessing");
-    #endif
 
     gpu_frame->pts = outframe++;
 

@@ -2,17 +2,6 @@
 #include <stdint.h>
 #include "color.cuh"
 #include <stdexcept>
-#include <cstdio>
-
-extern "C" int cuda_diagnostic_sync(char* error_message, size_t error_message_size)
-{
-    cudaError_t result = cudaDeviceSynchronize();
-    if (result == cudaSuccess) result = cudaGetLastError();
-    if (result == cudaSuccess) return 0;
-
-    std::snprintf(error_message, error_message_size, "%s", cudaGetErrorString(result));
-    return static_cast<int>(result);
-}
 
 __device__ __forceinline__ uint16_t clamp10(float v)
 {
