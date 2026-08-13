@@ -85,34 +85,8 @@ elseif((CMAKE_CUDA_COMPILER AND NOT COMPUTE_LANG) OR (COMPUTE_LANG STREQUAL "CUD
     set(CMAKE_CUDA_STANDARD 17)
     set(CMAKE_CUDA_STANDARD_REQUIRED ON)
     
-    if(WIN32)
-        if(NOT DEFINED SWAPTUBE_CUDA_ARCH OR SWAPTUBE_CUDA_ARCH STREQUAL "")
-            if(CMAKE_CUDA_COMPILER_VERSION VERSION_GREATER_EQUAL 13.0)
-                set(_swaptube_default_cuda_arch "60")
-            else()
-                set(_swaptube_default_cuda_arch "52")
-            endif()
-            set(SWAPTUBE_CUDA_ARCH "${_swaptube_default_cuda_arch}" CACHE STRING "CUDA compute capability target used for nvcc gencode flags")
-        endif()
-
-        if(NOT SWAPTUBE_CUDA_ARCH MATCHES "^[0-9]+$")
-            message(FATAL_ERROR
-                "SWAPTUBE_CUDA_ARCH must be a numeric compute capability such as 50, 75, or 86."
-            )
-        endif()
-
-        if(CMAKE_CUDA_COMPILER_VERSION VERSION_GREATER_EQUAL 13.0 AND SWAPTUBE_CUDA_ARCH VERSION_LESS 60)
-            message(FATAL_ERROR
-                "CUDA ${CMAKE_CUDA_COMPILER_VERSION} does not support compute capability ${SWAPTUBE_CUDA_ARCH}. "
-                "Set SWAPTUBE_CUDA_ARCH to a supported architecture, or build with a CUDA toolkit that still supports Maxwell-era targets."
-            )
-        endif()
-
-        message(STATUS "CUDA architecture target: ${SWAPTUBE_CUDA_ARCH}")
-        set(CMAKE_CUDA_ARCHITECTURES OFF)
-    else()
-        set(CMAKE_CUDA_ARCHITECTURES native)
-    endif()
+    set(CMAKE_CUDA_ARCHITECTURES native)
+    message(STATUS "CUDA architecture target: native GPU")
 
     file(GLOB_RECURSE GPU_SOURCES "src/CUDA/*.cu")
     set(CMAKE_CONFIGURE_DEPENDS ${GPU_SOURCES})
@@ -385,9 +359,6 @@ add_executable(${PROJECT_NAME}
     ${SOURCES}
     ${GPU_SOURCES}
 )
-if(SWAPTUBE_USE_CUDA)
-    set_property(TARGET ${PROJECT_NAME} PROPERTY CUDA_ARCHITECTURES OFF)
-endif()
 message(STATUS "Executable target ${PROJECT_NAME} added")
 
 target_compile_definitions(${PROJECT_NAME} PRIVATE
@@ -404,7 +375,6 @@ if(SWAPTUBE_USE_CUDA)
     if(WIN32)
         target_compile_options(${PROJECT_NAME} PRIVATE
             $<$<COMPILE_LANGUAGE:CUDA>:
-                -gencode=arch=compute_${SWAPTUBE_CUDA_ARCH},code=sm_${SWAPTUBE_CUDA_ARCH}
                 --expt-relaxed-constexpr
                 -Xcudafe --diag_suppress=20012
             >
