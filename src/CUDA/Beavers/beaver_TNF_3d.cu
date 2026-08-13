@@ -286,7 +286,7 @@ extern "C" void beaver_TNF_3D_cuda(
 ) {
     int* d_action_path;
     cudaMalloc(&d_action_path, action.size() * sizeof(int));
-    cout << "Action path size: " << action.size() << endl;
+    std::cout << "Action path size: " << action.size() << std::endl;
 
     cudaMemcpy(d_action_path, action.data(), action.size() * sizeof(int), cudaMemcpyHostToDevice);
 
