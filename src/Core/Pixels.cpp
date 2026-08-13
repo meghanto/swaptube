@@ -465,6 +465,7 @@ void Pixels::print_to_terminal() {
     CONSOLE_SCREEN_BUFFER_INFO info;
     int termWidth = 80;
     HANDLE handle = GetStdHandle(STD_OUTPUT_HANDLE);
+    SetConsoleOutputCP(CP_UTF8);
     if (handle != INVALID_HANDLE_VALUE && GetConsoleScreenBufferInfo(handle, &info)) {
         termWidth = info.srWindow.Right - info.srWindow.Left + 1;
         if (termWidth <= 0) termWidth = 80;
@@ -518,7 +519,7 @@ void Pixels::print_to_terminal() {
             // the foreground color and the bottom half in the background color.
             frame << "\033[38;2;" << r_top << ";" << g_top << ";" << b_top << "m"
                   << "\033[48;2;" << r_bot << ";" << g_bot << ";" << b_bot << "m"
-                  << "\u2580";
+                  << "\xE2\x96\x80";
         }
         // Reset colors at the end of each line.
         frame << "\033[0m\n";
