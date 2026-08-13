@@ -12,10 +12,6 @@
 #include <cstdlib>
 
 #if defined(USE_NVIDIA)
-    #include <cuda_runtime_api.h>
-#endif
-
-#if defined(USE_NVIDIA)
     #define PIXEL_FORMAT AV_PIX_FMT_CUDA
     #define HWDEVICE_TYPE AV_HWDEVICE_TYPE_CUDA
     #define CODEC_NAME "hevc_nvenc"
@@ -39,18 +35,15 @@ static bool terminal_preview_enabled() {
 }
 
 #if defined(USE_NVIDIA)
+extern "C" int cuda_diagnostic_sync(char* error_message, size_t error_message_size);
+
 static void check_cuda_boundary(const char* boundary) {
     const char* diagnostics = std::getenv("SWAPTUBE_CUDA_DIAGNOSTICS");
     if (diagnostics == nullptr || diagnostics[0] == '\0' || string(diagnostics) == "0") return;
 
-    cudaError_t result = cudaDeviceSynchronize();
-    if (result != cudaSuccess) {
-        throw runtime_error(string("CUDA failure ") + boundary + ": " + cudaGetErrorString(result));
-    }
-
-    result = cudaGetLastError();
-    if (result != cudaSuccess) {
-        throw runtime_error(string("CUDA pending error ") + boundary + ": " + cudaGetErrorString(result));
+    char error_message[256] = {};
+    if (cuda_diagnostic_sync(error_message, sizeof(error_message)) != 0) {
+        throw runtime_error(string("CUDA failure ") + boundary + ": " + error_message);
     }
 }
 #endif
