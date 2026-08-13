@@ -1,4 +1,5 @@
 #include "Rubiks.h"
+#include <cmath>
 #include <unordered_map>
 #include "../Host_Device_Shared/vec.h"
 
@@ -14,12 +15,45 @@
 Cut::Cut(const vec3& axis, float dist) : axis(axis), dist(dist) {};
 Cut::Cut() : axis(vec3(0, 0, 0)), dist(0) {}
 
+int interpolate(int i, int cube_size) {
+        return (i * (MAX_CUBE_SIZE-1)) / (cube_size - 1);
+    }
 
-
-void Rubiks::tick(const StateReturn& state) {}
-
-
-
+double Rubiks::get_hash(int cube_size) { //TODO make the hash not differentiate between cubes that are the same but rotated
+    double hash = 0.0;
+    double c = 0.0;
+    
+    for (int f = 0; f < 6; ++f) {
+        for (int x = 0; x < cube_size; ++x) {
+            int i = interpolate(x, cube_size);
+            for (int y = 0; y < cube_size; ++y) {
+                int j = interpolate(y, cube_size);
+                c+= 1.14159*x+25*y-27*f;
+                switch (pattern.pattern[f][i][j]) {
+                    case 'W': {
+                        hash += extended_mod(135.41*c, 13*i-142*j+2*f+123.12);
+                    };
+                    case 'O': {
+                        hash += extended_mod(147.425*c, 474*f+2*j-8*i-5.15);
+                    };
+                    case 'G': {
+                        hash += extended_mod(20.1331*c, 501*i-25*f-4*j+12.12);
+                    };
+                    case 'R': {
+                        hash += extended_mod(0.14157*c, 3*j+7*i-2*f-48.56);
+                    };
+                    case 'B': {
+                        hash += extended_mod(3.141*c, 45*f-78*j+36*i+7.00125);
+                    };
+                    case 'Y': {
+                        hash += extended_mod(70.31*c, 3*i+2*j-f+45.36);
+                    };
+                }
+            }
+        }
+    }
+    return hash;
+}
 
 
 // Here I had to define each face rotation individually, 
@@ -28,138 +62,174 @@ void Rubiks::tick(const StateReturn& state) {}
 
 // initially, depth would only turn the said depth, but 2swap asked that depth also turns the layers in between, so now depth is the maximum depth to turn, and all layers in between are turned as well.
 void Rubiks::rotateU(int depth){
-    int n = pattern.pattern[0].size();
     pattern.rotateFaceClockwise(0);
 
-    for (int d = 0; d <= depth && d < n - 1; ++d) {
-        std::vector<char> temp = pattern.pattern[2][d];
-        pattern.pattern[2][d] = pattern.pattern[5][d];
-        pattern.pattern[3][d] = pattern.pattern[4][d];
-        pattern.pattern[5][d] = pattern.pattern[3][d];
-        pattern.pattern[4][d] = temp;
+    for (int d = 0; d <= depth && d < MAX_CUBE_SIZE - 1; ++d) {
+        char temp[MAX_CUBE_SIZE];
+        for (int i = 0; i < MAX_CUBE_SIZE; ++i) {
+            temp[i] = pattern.pattern[2][d][i];
+        }
+        for (int i = 0; i < MAX_CUBE_SIZE; ++i) {
+            pattern.pattern[2][d][i] = pattern.pattern[3][d][i];
+            pattern.pattern[3][d][i] = pattern.pattern[4][d][i];
+            pattern.pattern[4][d][i] = pattern.pattern[1][d][i];
+            pattern.pattern[1][d][i] = temp[i];
+        }
+
     }
 }
+
 
 
 void Rubiks::rotateD(int depth) {
-    int n = pattern.pattern[1].size();
-    pattern.rotateFaceClockwise(1);
+    pattern.rotateFaceClockwise(5);
 
-    for (int d = 0; d <= depth && d < n - 1; ++d) {
-        std::vector<char> temp = pattern.pattern[2][n - 1 - d];
-        pattern.pattern[2][n - 1 - d] = pattern.pattern[4][n - 1 - d];
-        pattern.pattern[4][n - 1 - d] = pattern.pattern[3][n - 1 - d];
-        pattern.pattern[3][n - 1 - d] = pattern.pattern[5][n - 1 - d];
-        pattern.pattern[5][n - 1 - d] = temp;
+    for (int d = 0; d <= depth && d < MAX_CUBE_SIZE - 1; ++d) {
+        char temp[MAX_CUBE_SIZE];
+        for (int i = 0; i < MAX_CUBE_SIZE; ++i) {
+            temp[i] = pattern.pattern[2][MAX_CUBE_SIZE - 1 - d][i];
+        }
+        for (int i = 0; i < MAX_CUBE_SIZE; ++i) {
+            pattern.pattern[2][MAX_CUBE_SIZE - 1 - d][i] = pattern.pattern[1][MAX_CUBE_SIZE - 1 - d][i];
+            pattern.pattern[1][MAX_CUBE_SIZE - 1 - d][i] = pattern.pattern[4][MAX_CUBE_SIZE - 1 - d][i];
+            pattern.pattern[4][MAX_CUBE_SIZE - 1 - d][i] = pattern.pattern[3][MAX_CUBE_SIZE - 1 - d][i];
+            pattern.pattern[3][MAX_CUBE_SIZE - 1 - d][i] = temp[i];
+        }
     }
 }
 
+
 void Rubiks::rotateF(int depth) {
-    int n = pattern.pattern[2].size();
+    int n = MAX_CUBE_SIZE;
     pattern.rotateFaceClockwise(2);
 
-    pattern.transposeFace(4);
-    pattern.transposeFace(5);
+    pattern.transposeFace(1);
+    pattern.transposeFace(3);
 
     for (int d = 0; d <= depth && d < n - 1; ++d) {
-        std::vector<char> temp = pattern.pattern[0][n - 1 - d];
-        std::reverse(pattern.pattern[4][n - 1 - d].begin(), pattern.pattern[4][n - 1 - d].end());
-        std::reverse(pattern.pattern[5][d].begin(), pattern.pattern[5][d].end());
+
+        char temp[MAX_CUBE_SIZE];
+        for (int i = 0; i < MAX_CUBE_SIZE; ++i) {
+            temp[i] = pattern.pattern[0][n - 1 - d][i];
+        }
+        std::reverse(pattern.pattern[1][n - 1 - d], pattern.pattern[1][n - 1 - d+1]);
+        std::reverse(pattern.pattern[3][d], pattern.pattern[3][d+1]);
         
-        pattern.pattern[0][n - 1 - d] = pattern.pattern[4][n - 1 - d];
-        pattern.pattern[4][n - 1 - d] = pattern.pattern[1][d];
-        pattern.pattern[1][d] = pattern.pattern[5][d];
-        pattern.pattern[5][d] = temp;
-        
-        std::reverse(pattern.pattern[4][n - 1 - d].begin(), pattern.pattern[4][n - 1 - d].end());
-        std::reverse(pattern.pattern[5][d].begin(), pattern.pattern[5][d].end());
+        for (int i = 0; i < MAX_CUBE_SIZE; ++i) {
+            pattern.pattern[0][n - 1 - d][i] = pattern.pattern[1][n - 1 - d][i];
+            pattern.pattern[1][n - 1 - d][i] = pattern.pattern[5][d][i];
+            pattern.pattern[5][d][i] = pattern.pattern[3][d][i];
+            pattern.pattern[3][d][i] = temp[i];
+        }
     }
 
-    pattern.transposeFace(4);
-    pattern.transposeFace(5);
+    pattern.transposeFace(1);
+    pattern.transposeFace(3);
 }
 
 void Rubiks::rotateB(int depth) {
-    int n = pattern.pattern[3].size();
-    pattern.rotateFaceClockwise(3);
+    int n = MAX_CUBE_SIZE;
+    pattern.rotateFaceClockwise(4);
 
-    pattern.transposeFace(4);
-    pattern.transposeFace(5);
+    pattern.transposeFace(1);
+    pattern.transposeFace(3);
 
     for (int d = 0; d <= depth && d < n - 1; ++d) {
-        std::vector<char> temp = pattern.pattern[0][d];
-        std::reverse(pattern.pattern[4][d].begin(), pattern.pattern[4][d].end());
-        std::reverse(pattern.pattern[5][n - 1 - d].begin(), pattern.pattern[5][n - 1 - d].end());
+        char temp[MAX_CUBE_SIZE];
+        for (int i = 0; i < MAX_CUBE_SIZE; ++i) {
+            temp[i] = pattern.pattern[0][d][i];
+        }
+        std::reverse(pattern.pattern[5][n - 1 - d], pattern.pattern[5][n - 1 - d+1]);
         
-        pattern.pattern[0][d] = pattern.pattern[5][n - 1 - d];
-        pattern.pattern[5][n - 1 - d] = pattern.pattern[1][n - 1 - d];
-        pattern.pattern[1][n - 1 - d] = pattern.pattern[4][d];
-        pattern.pattern[4][d] = temp;
+        for (int i = 0; i < MAX_CUBE_SIZE; ++i) {
+            pattern.pattern[0][d][i] = pattern.pattern[3][n - 1 - d][i];
+            pattern.pattern[3][n - 1 - d][i] = pattern.pattern[5][n - 1 - d][i];
+            pattern.pattern[5][n - 1 - d][i] = pattern.pattern[1][d][i];
+            pattern.pattern[1][d][i] = temp[i];
+        }
 
-        std::reverse(pattern.pattern[4][d].begin(), pattern.pattern[4][d].end());
-        std::reverse(pattern.pattern[5][n - 1 - d].begin(), pattern.pattern[5][n - 1 - d].end());
+        std::reverse(pattern.pattern[1][d], pattern.pattern[1][d+1]);
     }
 
-    pattern.transposeFace(4);
-    pattern.transposeFace(5);
+    pattern.transposeFace(1);
+    pattern.transposeFace(3);
 }
 
 void Rubiks::rotateR(int depth) {
-    int n = pattern.pattern[5].size();
-    pattern.rotateFaceClockwise(5);
+    int n = MAX_CUBE_SIZE;
+    pattern.rotateFaceClockwise(3);
 
     pattern.transposeFace(0);
     pattern.transposeFace(2);
-    pattern.transposeFace(1);
-    pattern.transposeFace(3);
+    pattern.transposeFace(4);
+    pattern.transposeFace(5);
 
     for (int d = 0; d <= depth && d < n - 1; ++d) {
-        std::vector<char> temp = pattern.pattern[0][n - 1 - d];
-        std::reverse(pattern.pattern[3][d].begin(), pattern.pattern[3][d].end());
-        std::reverse(temp.begin(), temp.end());
+        char temp[MAX_CUBE_SIZE];
+        for (int i = 0; i < MAX_CUBE_SIZE; ++i) {
+            temp[i] = pattern.pattern[0][n - 1 - d][i];
+        }
+        std::reverse(pattern.pattern[4][d], pattern.pattern[4][d+1]);
+        std::reverse(temp, &(temp[MAX_CUBE_SIZE])); 
         
-        pattern.pattern[0][n - 1 - d] = pattern.pattern[2][n - 1 - d];
-        pattern.pattern[2][n - 1 - d] = pattern.pattern[1][n - 1 - d];
-        pattern.pattern[1][n - 1 - d] = pattern.pattern[3][d];
-        pattern.pattern[3][d] = temp;
-
-        std::reverse(pattern.pattern[3][d].begin(), pattern.pattern[3][d].end());
+        for (int i = 0; i < MAX_CUBE_SIZE; ++i) {
+            pattern.pattern[0][n - 1 - d][i] = pattern.pattern[2][n - 1 - d][i];
+            pattern.pattern[2][n - 1 - d][i] = pattern.pattern[5][n - 1 - d][i];
+            pattern.pattern[5][n - 1 - d][i] = pattern.pattern[4][d][i];
+            pattern.pattern[4][d][i] = temp[i];
+        }
     }
 
     pattern.transposeFace(0);
     pattern.transposeFace(2);
-    pattern.transposeFace(1);
-    pattern.transposeFace(3);
+    pattern.transposeFace(4);
+    pattern.transposeFace(5);
 }
 
 void Rubiks::rotateL(int depth) {
-    int n = pattern.pattern[4].size();
-    pattern.rotateFaceClockwise(4);
+    int n = MAX_CUBE_SIZE;
+    pattern.rotateFaceClockwise(1);
 
     pattern.transposeFace(0);
     pattern.transposeFace(2);
-    pattern.transposeFace(1);
-    pattern.transposeFace(3);
+    pattern.transposeFace(4);
+    pattern.transposeFace(5);
 
     for (int d = 0; d <= depth && d < n - 1; ++d) {
-        std::vector<char> temp = pattern.pattern[0][d];
-        std::reverse(temp.begin(), temp.end());
-        std::reverse(pattern.pattern[3][n - 1 - d].begin(), pattern.pattern[3][n - 1 - d].end());
-        
-        pattern.pattern[0][d] = pattern.pattern[3][n - 1 - d];
-        pattern.pattern[3][n - 1 - d] = pattern.pattern[1][d];
-        pattern.pattern[1][d] = pattern.pattern[2][d];
-        pattern.pattern[2][d] = temp;
+        char temp[MAX_CUBE_SIZE];
+        for (int i = 0; i < MAX_CUBE_SIZE; ++i) {
+            temp[i] = pattern.pattern[0][d][i];
+        }
+        std::reverse(pattern.pattern[4][n - 1 - d], pattern.pattern[4][n - 1 - d+1]);
+        std::reverse(pattern.pattern[5][d], pattern.pattern[5][d+1]);
 
-        std::reverse(pattern.pattern[3][n - 1 - d].begin(), pattern.pattern[3][n - 1 - d].end());
+        for (int i = 0; i < MAX_CUBE_SIZE; ++i) {
+            pattern.pattern[0][d][i] = pattern.pattern[4][n - 1 - d][i];
+            pattern.pattern[4][n - 1 - d][i] = pattern.pattern[5][d][i];
+            pattern.pattern[5][d][i] = pattern.pattern[2][d][i];
+            pattern.pattern[2][d][i] = temp[i];
+        }
+
     }
 
     pattern.transposeFace(0);
     pattern.transposeFace(2);
-    pattern.transposeFace(1);
-    pattern.transposeFace(3);
+    pattern.transposeFace(4);
+    pattern.transposeFace(5);
 }
 
+void Rubiks::print() {
+    for (int f = 0; f < 6; ++f) {
+        std::cout << "Face " << f << ":\n";
+        for (int i = 0; i < MAX_CUBE_SIZE; ++i) {
+            for (int j = 0; j < MAX_CUBE_SIZE; ++j) {
+                std::cout << pattern.pattern[f][i][j] << ' ';
+            }
+            std::cout << '\n';
+        }
+        std::cout << '\n';
+    }
+}
 
 Move Rubiks::parseMove(const std::string& token){
     Move m;
@@ -171,7 +241,7 @@ Move Rubiks::parseMove(const std::string& token){
 
     while (pos < token.size() && std::isdigit(token[pos]))
     {
-        layer = layer * 10 + (token[pos] - '0'); // dunno why I substracted 0 here
+        layer = layer * 10 + (token[pos] - '0');
         pos++;
     }
 

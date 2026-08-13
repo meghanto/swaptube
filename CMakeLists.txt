@@ -1,4 +1,8 @@
 cmake_minimum_required(VERSION 3.24)
+if(EXISTS "${CMAKE_SOURCE_DIR}/local_override.cmake")
+    include("${CMAKE_SOURCE_DIR}/local_override.cmake")
+    return()
+endif()
 project(swaptube LANGUAGES CXX)
 include(local.cmake OPTIONAL)
 set(CMAKE_CXX_STANDARD 17)

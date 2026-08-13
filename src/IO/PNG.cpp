@@ -1,29 +1,29 @@
 #include "PNG.h"
 
-#include <filesystem>
 #include <png.h>
 #include <vector>
 #include <stdexcept>
-#include <librsvg/rsvg.h>
 #include <sys/stat.h>
 #include <cmath>
 #include <sstream>
 #include <unordered_map>
 #include <cairo.h>
+#include <gdk-pixbuf/gdk-pixbuf.h>
 #include <iostream>
 #include "ScalingParams.h"
 
 using namespace std;
-namespace fs = std::filesystem;
 
-void pix_to_png(const Pixels& pix, const string& filename) {
+void pix_to_png(const Pixels& pix, const string& full_filename) {
     if(pix.wh.x * pix.wh.y == 0) return; // cowardly exit.
 
 #ifdef _WIN32
+    // Avoid passing an MSVC FILE* into a MinGW-built libpng DLL. Cairo owns
+    // the file operation internally and is already a required dependency.
     cairo_surface_t* surface = cairo_image_surface_create(CAIRO_FORMAT_ARGB32, pix.wh.x, pix.wh.y);
     if (!surface || cairo_surface_status(surface) != CAIRO_STATUS_SUCCESS) {
         if (surface) cairo_surface_destroy(surface);
-        throw runtime_error("Failed to create cairo surface for PNG writing: " + filename);
+        throw runtime_error("Failed to create cairo surface for PNG writing: " + full_filename);
     }
 
     unsigned char* data = cairo_image_surface_get_data(surface);
@@ -36,14 +36,11 @@ void pix_to_png(const Pixels& pix, const string& filename) {
             uint8_t r = (pixel >> 16) & 0xFF;
             uint8_t g = (pixel >> 8) & 0xFF;
             uint8_t b = pixel & 0xFF;
-
-            // Cairo ARGB32 expects premultiplied channels.
             if (a != 255) {
                 r = static_cast<uint8_t>((static_cast<int>(r) * a + 127) / 255);
                 g = static_cast<uint8_t>((static_cast<int>(g) * a + 127) / 255);
                 b = static_cast<uint8_t>((static_cast<int>(b) * a + 127) / 255);
             }
-
             unsigned char* px = row + x * 4;
             px[0] = b;
             px[1] = g;
@@ -52,20 +49,16 @@ void pix_to_png(const Pixels& pix, const string& filename) {
         }
     }
     cairo_surface_mark_dirty(surface);
-
-    const string outpath = "io_out/" + filename + ".png";
-    const cairo_status_t status = cairo_surface_write_to_png(surface, outpath.c_str());
+    cairo_status_t status = cairo_surface_write_to_png(surface, full_filename.c_str());
     cairo_surface_destroy(surface);
     if (status != CAIRO_STATUS_SUCCESS) {
-        throw runtime_error("Failed to write PNG file " + outpath + " via cairo.");
+        throw runtime_error("Failed to write PNG file " + full_filename + ": " + cairo_status_to_string(status));
     }
-    return;
-#endif
-
+#else
     // Open the file for writing (binary mode)
-    FILE* fp = fopen(("io_out/" + filename + ".png").c_str(), "wb");
+    FILE* fp = fopen(full_filename.c_str(), "wb");
     if (!fp) {
-        throw runtime_error("Failed to open png file for writing: " + filename);
+        throw runtime_error("Failed to open png file for writing: " + full_filename);
     }
 
     // Initialize write structure
@@ -132,9 +125,8 @@ void pix_to_png(const Pixels& pix, const string& filename) {
     // Cleanup
     png_destroy_write_struct(&png, &info);
     fclose(fp);
+#endif
 }
-
-
 
 void png_to_pix(Pixels& pix, const string& filename_with_or_without_suffix) {
     // Check if the filename already ends with ".png"
@@ -151,6 +143,22 @@ void png_to_pix(Pixels& pix, const string& filename_with_or_without_suffix) {
     if (it != png_cache.end()) {
         pix = it->second;
         return;
+    }
+
+    bool png_exists = false;
+    struct stat buffer;
+    if (stat(fullpath.c_str(), &buffer) == 0) {
+        png_exists = true;
+    }
+    if (!png_exists) {
+        Pixels p(ivec2(100,100));
+        for (int x = 0; x < 10; x++) {
+            for (int y = 0; y < 10; y++) {
+                int col = ((x+y)%2) ? 0xff666666 : 0xffaaaaaa;
+                p.fill_rect(x*10, y*10, 10, 10, col);
+            }
+        }
+        pix_to_png(p, fullpath);
     }
 
 #ifdef _WIN32
@@ -180,7 +188,6 @@ void png_to_pix(Pixels& pix, const string& filename_with_or_without_suffix) {
             const uint8_t g_premul = px[1];
             const uint8_t r_premul = px[2];
             const uint8_t a = px[3];
-
             uint8_t r = r_premul;
             uint8_t g = g_premul;
             uint8_t b = b_premul;
@@ -192,7 +199,6 @@ void png_to_pix(Pixels& pix, const string& filename_with_or_without_suffix) {
             pix.set_pixel_carelessly(x, y, argb(a, r, g, b));
         }
     }
-
     cairo_surface_destroy(surface);
     png_cache[fullpath] = pix;
     return;
@@ -307,32 +313,9 @@ struct StringIntPairEq {
     }
 };
 
-void png_to_pix_bounding_box(Pixels& pix, const string& filename, int w, int h) {
-    static unordered_map<pair<string, pair<int, int>>, Pixels, StringIntPairHash, StringIntPairEq> png_bounding_box_cache;
-    auto key = make_pair(filename, make_pair(w, h));
-    auto it = png_bounding_box_cache.find(key);
-    if (it != png_bounding_box_cache.end()) {
-        pix = it->second;
-        return;
-    }
-
-    Pixels image;
-    png_to_pix(image, filename);
-
-    image.scale_to_bounding_box(w, h, pix);
-
-    // Store in cache with scale
-    png_bounding_box_cache[key] = pix;
-}
-
-
-
 void pdf_page_to_pix(Pixels& pix, const string& pdf_filename_without_suffix, const int page_number) {
     if (page_number < 1) {
         throw runtime_error("PDF page number is 1-indexed and should be positive.");
-    }
-    if (page_number >= 100) {
-        throw runtime_error("PDF page number too large; pdf_page_to_pix only supports up to 99 pages. (TODO)");
     }
 
     // HOW TO MAKE PAGES:
@@ -344,15 +327,26 @@ void pdf_page_to_pix(Pixels& pix, const string& pdf_filename_without_suffix, con
     }
     const string resolved_filename_with_suffix = resolved_filename_without_suffix + ".pdf";
 
-    const string png_filename = resolved_filename_without_suffix + "-" + (page_number < 10 ? "0" : "") + to_string(page_number) + ".png";
+    const string page_number_str = to_string(page_number);
+    const string png_filename_without_suffix = resolved_filename_without_suffix + "-" + page_number_str;
+    const string png_filename = png_filename_without_suffix + ".png";
 
-    bool png_file_exists = fs::exists(png_filename);
+    struct stat buffer;
+
+    if (stat(resolved_filename_with_suffix.c_str(), &buffer) != 0) {
+        png_to_pix(pix, png_filename.substr(6));
+        return;
+    }
+
+    bool png_file_exists = false;
+    if (stat(png_filename.c_str(), &buffer) == 0) {
+        png_file_exists = true;
+    }
 
     // Execute pdftocairo command to convert the specified page to PNG
     if (!png_file_exists) {
         cout << "Converting PDF page " << page_number << " to PNG..." << endl;
-        const string page_number_str = to_string(page_number);
-        const string command = "pdftocairo -png -f " + page_number_str + " -l " + page_number_str + " -r 300 " + resolved_filename_with_suffix + " " + resolved_filename_without_suffix;
+        const string command = "pdftocairo -png -f " + page_number_str + " -singlefile -r 300 " + resolved_filename_with_suffix + " " + png_filename_without_suffix;
         int result = system(command.c_str());
         if (result != 0) {
             throw runtime_error("Failed to convert PDF page to PNG using pdftocairo. Command executed:\n" + command);
@@ -360,7 +354,7 @@ void pdf_page_to_pix(Pixels& pix, const string& pdf_filename_without_suffix, con
     }
 
     // Verify that the PNG file was created
-    if (!fs::exists(png_filename)) {
+    if (stat(png_filename.c_str(), &buffer) != 0) {
         throw runtime_error("PNG file was not created after pdftocairo command.");
     }
 

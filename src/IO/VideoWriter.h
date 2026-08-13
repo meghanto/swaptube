@@ -3,6 +3,7 @@
 #include <string>
 #include "../Core/Pixels.h"
 #include "IoHelpers.h"
+#include "LivePlayer.h"
 
 extern "C"
 {
@@ -30,6 +31,7 @@ private:
     unsigned outframe = 0;
     SwsContext* sws_ctx = nullptr;
     HWFrameFormat negotiated_format = HWFrameFormat::P010LE;
+    LivePlayer* live_player = nullptr;
 
     bool encode_and_write_frame(AVFrame* frame);
 

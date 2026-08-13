@@ -2,104 +2,17 @@
 
 #include <vector>
 #include <stdexcept>
-#include <librsvg/rsvg.h>
+#include <librsvg-2.0/librsvg/rsvg.h>
 #include <sys/stat.h>
 #include <cmath>
 #include <sstream>
 #include <unordered_map>
-#include <limits.h>
-#include <filesystem>
 #include <cairo.h>
 #include <gdk-pixbuf/gdk-pixbuf.h>
 #include <iostream>
-
-#ifdef _WIN32
-#define WIN32_LEAN_AND_MEAN
-#define NOMINMAX
-#include <windows.h>
-#endif
+#include "../Core/Pixels.h"
 
 using namespace std;
-
-#ifdef _WIN32
-static string quote_windows_argument(const string& argument) {
-    string quoted = "\"";
-    size_t backslashes = 0;
-    for (char c : argument) {
-        if (c == '\\') {
-            backslashes++;
-        } else if (c == '"') {
-            quoted.append(backslashes * 2 + 1, '\\');
-            quoted.push_back('"');
-            backslashes = 0;
-        } else {
-            quoted.append(backslashes, '\\');
-            backslashes = 0;
-            quoted.push_back(c);
-        }
-    }
-    quoted.append(backslashes * 2, '\\');
-    quoted.push_back('"');
-    return quoted;
-}
-
-static int run_microtex(
-    const filesystem::path& executable,
-    const filesystem::path& working_directory,
-    const string& latex,
-    const string& output_name
-) {
-    vector<string> arguments = {
-        executable.string(),
-        "-headless",
-        "-foreground=#ffffffff",
-        "-input=" + latex,
-        "-output=" + output_name,
-    };
-    string command_line;
-    for (const string& argument : arguments) {
-        if (!command_line.empty()) command_line.push_back(' ');
-        command_line += quote_windows_argument(argument);
-    }
-    vector<char> mutable_command_line(command_line.begin(), command_line.end());
-    mutable_command_line.push_back('\0');
-
-    STARTUPINFOA startup_info{};
-    startup_info.cb = sizeof(startup_info);
-    PROCESS_INFORMATION process_info{};
-    BOOL created = CreateProcessA(
-        executable.string().c_str(), mutable_command_line.data(),
-        nullptr, nullptr, FALSE, 0, nullptr,
-        working_directory.string().c_str(), &startup_info, &process_info
-    );
-    if (!created) {
-        throw runtime_error("Failed to start MicroTeX LaTeX.exe (Windows error " + to_string(GetLastError()) + ").");
-    }
-
-    WaitForSingleObject(process_info.hProcess, INFINITE);
-    DWORD exit_code = 1;
-    if (!GetExitCodeProcess(process_info.hProcess, &exit_code)) {
-        DWORD error = GetLastError();
-        CloseHandle(process_info.hThread);
-        CloseHandle(process_info.hProcess);
-        throw runtime_error("Failed to read MicroTeX exit code (Windows error " + to_string(error) + ").");
-    }
-    CloseHandle(process_info.hThread);
-    CloseHandle(process_info.hProcess);
-    return static_cast<int>(exit_code);
-}
-#endif
-
-string latex_color(uint32_t color, string text) {
-    // Mask out the alpha channel
-    uint32_t rgb = color & 0x00FFFFFF;
-
-    // Convert to a hex string
-    stringstream ss;
-    ss << "\\textcolor{#" << hex << setw(6) << setfill('0') << rgb << "}{" << text << "}";
-
-    return ss.str();
-}
 
 static gboolean get_svg_intrinsic_size(RsvgHandle *handle, gdouble* width, gdouble* height) {
     #if LIBRSVG_CHECK_VERSION(2, 52, 0)
@@ -114,7 +27,7 @@ static gboolean get_svg_intrinsic_size(RsvgHandle *handle, gdouble* width, gdoub
     #endif
 }
 
-Pixels svg_to_pix(const string& filename_with_or_without_suffix, ScalingParams& scaling_params) {
+shared_ptr<DevicePointer> svg_to_gpu_pix(const string& filename_with_or_without_suffix, ScalingParams& scaling_params) {
     // Check if the filename already ends with ".svg"
     string filename = "io_in/" + filename_with_or_without_suffix;
     if (filename.length() < 4 || filename.substr(filename.length() - 4) != ".svg") {
@@ -181,11 +94,12 @@ Pixels svg_to_pix(const string& filename_with_or_without_suffix, ScalingParams& 
 
     // Render SVG
     if (!rsvg_handle_render_document(handle, cr, &viewport, &error)) {
+        auto e = runtime_error("Failed to render SVG file " + filename + ": " + error->message);
         g_error_free(error);
         cairo_destroy(cr);
         cairo_surface_destroy(surface);
         g_object_unref(handle);
-        throw runtime_error("Failed to render SVG file " + filename + ": " + error->message);
+        throw e;
     }
 
     // Copy pixels into Pixels object
@@ -208,94 +122,10 @@ Pixels svg_to_pix(const string& filename_with_or_without_suffix, ScalingParams& 
 
     Pixels ret;
     copy.crop_by_alpha(ret);
-    return ret;
-}
 
-// Custom hash and equality for pair<string, pair<int,int>>
-struct StringIntPairHash {
-    size_t operator()(const pair<string, pair<int, int>>& p) const noexcept {
-        size_t h1 = std::hash<string>{}(p.first);
-        size_t h2 = (static_cast<size_t>(p.second.first) << 32) ^ static_cast<size_t>(p.second.second);
-        // boost-like mix
-        return h1 ^ (h2 + 0x9e3779b97f4a7c15ULL + (h1<<6) + (h1>>2));
-    }
-};
-struct StringIntPairEq {
-    bool operator()(const pair<string, pair<int, int>>& a, const pair<string, pair<int, int>>& b) const noexcept {
-        return a.first == b.first && a.second.first == b.second.first && a.second.second == b.second.second;
-    }
-};
+    shared_ptr<DevicePointer> dp = make_shared<DevicePointer>(ret.wh);
+    cout << "SVG: " << filename << " -> " << ret.wh.x << "x" << ret.wh.y << endl;
+    dp->copy_to_device(ret.pixels.data());
 
-// Create an unordered_map to store the cached results
-unordered_map<string, pair<Pixels, double>> latex_cache;
-
-static string generate_cache_key(const string& text, const ScalingParams& scaling_params) {
-    hash<string> hasher;
-    string key = text + "_" + to_string(static_cast<int>(scaling_params.mode)) + "_" + 
-                 to_string(scaling_params.bounding_box.x) + "_" + 
-                 to_string(scaling_params.bounding_box.y) + "_" +
-                 to_string(scaling_params.scale_factor);
-    return to_string(hasher(key));
-}
-
-/*
- * We use MicroTEX to convert LaTeX equations into svg files.
- */
-Pixels latex_to_pix(const string& latex, ScalingParams& scaling_params) {
-    // Generate a cache key based on the equation and scaling parameters
-    string cache_key = generate_cache_key(latex, scaling_params);
-
-    // Check if the result is already in the cache
-    auto it = latex_cache.find(cache_key);
-    if (it != latex_cache.end()) {
-        scaling_params.scale_factor = it->second.second;
-        return it->second.first; // Return the cached Pixels object
-    }
-
-    cout << "Generating LaTeX for: " << latex << endl;
-
-    hash<string> hasher;
-    string latex_dir = "io_in/latex/";
-    std::filesystem::create_directories(latex_dir);
-    string name_without_folder = to_string(hasher(latex)) + ".svg";
-    string name = (std::filesystem::absolute(latex_dir) / name_without_folder).string();
-
-    if (!std::filesystem::exists(name)) {
-#ifdef _WIN32
-        string output_name = name;
-        for (char& c : output_name) {
-            if (c == '\\') c = '/';
-        }
-        string microtex_build_dir = std::filesystem::absolute("../../MicroTeX-master/build-mingw-headless").string();
-        if (!std::filesystem::exists(microtex_build_dir)) {
-            microtex_build_dir = std::filesystem::absolute("../../MicroTeX-master/build").string();
-        }
-        filesystem::path microtex_executable = filesystem::path(microtex_build_dir) / "LaTeX.exe";
-        int result = run_microtex(microtex_executable, microtex_build_dir, latex, output_name);
-#else
-        string command = "cd ../../MicroTeX-master/build/ && ./LaTeX -headless -foreground=#ffffffff \"-input=" + latex + "\" -output=" + name + " >/dev/null 2>&1";
-        int result = system(command.c_str());
-#endif
-        if(result != 0) {
-#ifndef _WIN32
-            cout << command << endl;
-#endif
-            throw runtime_error("Failed to generate LaTeX (MicroTeX exit code " + to_string(result) + ").");
-        }
-    }
-
-    // System call successful, return the generated SVG
-    Pixels pixels = svg_to_pix("latex/" + name_without_folder, scaling_params);
-    latex_cache[cache_key] = make_pair(pixels, scaling_params.scale_factor); // Cache the result before returning
-    return pixels;
-}
-
-void write_text(Pixels& pix, const std::string& latex, const vec2& center, const vec2& text_envelope, const double opacity, const float angle) {
-    ScalingParams scaling_params(text_envelope);
-
-    Pixels text = latex_to_pix(latex, scaling_params);
-    if(abs(angle) > 0.001)
-        pix.overlay_cpu_with_rotation(text, center, opacity, angle);
-    else
-        pix.overlay_cpu(text, center, opacity);
+    return dp;
 }

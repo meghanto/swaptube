@@ -27,6 +27,8 @@
 
 using namespace std;
 
+const bool USE_LIVE = false;
+
 static bool terminal_preview_enabled() {
     const char* quiet = std::getenv("SWAPTUBE_QUIET");
     return quiet == nullptr || quiet[0] == '\0' || string(quiet) == "0";
@@ -152,6 +154,11 @@ static AVCodecContext* attempt_codec_init(
 }
 
 VideoWriter::VideoWriter(AVFormatContext *fc_, const string& video_path, int video_width_pixels, int video_height_pixels, int video_framerate_fps) : fc(fc_) {
+    if (USE_LIVE) {
+        live_player = new LivePlayer(ivec2(video_width_pixels, video_height_pixels));
+        return;
+    }
+
     #ifdef USE_AMD
     #ifdef _WIN32
     _putenv_s("AMD_DEBUG", "notiling");
@@ -312,6 +319,11 @@ void VideoWriter::add_frame(uint32_t* device_pixels) {
 
     if (!live) return; // Don't encode video in smoketest
 
+    if (USE_LIVE) {
+        live_player->accept_frame(device_pixels, false);
+        return;
+    }
+
     AVFrame* gpu_frame = av_frame_alloc();
     if (!gpu_frame) {
         throw runtime_error("Failed to allocate frame!");
@@ -406,6 +418,11 @@ void VideoWriter::add_frame(uint32_t* device_pixels) {
 }
 
 VideoWriter::~VideoWriter() {
+    if (USE_LIVE) {
+        delete live_player;
+        return;
+    }
+
     cout << "Cleaning up VideoWriter..." << endl;
 
     while(encode_and_write_frame(NULL));
