@@ -454,8 +454,11 @@ void Pixels::bicubic_scale(int new_width, int new_height, Pixels& result) const 
 void Pixels::print_to_terminal() {
     if (std::getenv("SWAPTUBE_QUIET")) return;
 
-    // Print an empty line first.
-    cout << endl;
+    // Build the entire preview before writing it. Native Windows terminals are
+    // particularly slow when every ANSI sequence and row is submitted as a
+    // separate console write.
+    ostringstream frame;
+    frame << "\033[?2026h\n"; // Begin a synchronized terminal update.
 
     // Get terminal dimensions.
 #ifdef _WIN32
@@ -513,15 +516,19 @@ void Pixels::print_to_terminal() {
             //  - Set background to the average bottom color.
             // Then print the Unicode upper half block (▀), which renders the top half in
             // the foreground color and the bottom half in the background color.
-            cout << "\033[38;2;" << r_top << ";" << g_top << ";" << b_top << "m"
-                 << "\033[48;2;" << r_bot << ";" << g_bot << ";" << b_bot << "m"
-                 << "\u2580";
+            frame << "\033[38;2;" << r_top << ";" << g_top << ";" << b_top << "m"
+                  << "\033[48;2;" << r_bot << ";" << g_bot << ";" << b_bot << "m"
+                  << "\u2580";
         }
         // Reset colors at the end of each line.
-        cout << "\033[0m" << endl;
+        frame << "\033[0m\n";
     }
     // Reset at the end.
-    cout << "\033[0m" << endl;
+    frame << "\033[0m\n\033[?2026l"; // End the synchronized update.
+
+    const string output = frame.str();
+    cout.write(output.data(), static_cast<streamsize>(output.size()));
+    cout.flush();
 }
 
 // Free functions implementations
