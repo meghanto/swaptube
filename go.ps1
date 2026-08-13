@@ -273,7 +273,7 @@ try {
     Import-VcVars64 $vcVars
 
     $cxxCompiler = (Get-Command cl.exe -ErrorAction Stop).Source
-    $cmakeArgs = @('-G', 'Ninja', '..', '-DCMAKE_BUILD_TYPE=Release', "-DCMAKE_CXX_COMPILER=$cxxCompiler", "-DCOMPUTE_LANG=$ComputeLang")
+    $cmakeArgs = @('-G', 'Ninja', '..', '-DCMAKE_BUILD_TYPE=Release', "-DCMAKE_CXX_COMPILER=$cxxCompiler", "-DCMAKE_MAKE_PROGRAM=$ninjaExecutable", "-DCOMPUTE_LANG=$ComputeLang")
     $msys2Root = Find-Msys2Root
     if ($msys2Root) {
         Assert-Msys2PackageLock $msys2Root
@@ -293,7 +293,23 @@ try {
     Write-Host "go.ps1: Building $ProjectName with MSVC; output is $outputDir"
     Push-Location $buildDir
     try {
-        if (-not (Test-Path -LiteralPath (Join-Path $buildDir 'build.ninja') -PathType Leaf)) {
+        $buildNinja = Join-Path $buildDir 'build.ninja'
+        $cmakeCache = Join-Path $buildDir 'CMakeCache.txt'
+        $needsConfigure = -not (Test-Path -LiteralPath $buildNinja -PathType Leaf)
+        if (-not $needsConfigure -and (Test-Path -LiteralPath $cmakeCache -PathType Leaf)) {
+            $cachedNinjaLine = Get-Content -LiteralPath $cmakeCache |
+                Where-Object { $_ -like 'CMAKE_MAKE_PROGRAM:*' } |
+                Select-Object -First 1
+            $cachedNinja = if ($cachedNinjaLine) { ($cachedNinjaLine -split '=', 2)[1] } else { $null }
+            if (-not $cachedNinja -or -not [string]::Equals(
+                    $cachedNinja.Replace('/', '\'),
+                    $ninjaExecutable.Replace('/', '\'),
+                    [StringComparison]::OrdinalIgnoreCase)) {
+                Write-Host "go.ps1: Updating CMake to use $ninjaExecutable"
+                $needsConfigure = $true
+            }
+        }
+        if ($needsConfigure) {
             Invoke-Native { & $cmakeExecutable @cmakeArgs } 1 'CMake configuration'
         }
         $jobs = [Environment]::ProcessorCount
