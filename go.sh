@@ -112,7 +112,7 @@ run_windows_dev_pipeline() {
         fi
         echo "cd /d \"${build_dir_win}\""
         echo "if errorlevel 1 exit /b 1"
-        echo "cmake -G Ninja .. -DCMAKE_BUILD_TYPE=Release ${cmake_args}"
+        echo "if not exist build.ninja cmake -G Ninja .. -DCMAKE_BUILD_TYPE=Release ${cmake_args}"
         echo "if errorlevel 1 exit /b 1"
         echo "ninja -j${build_jobs}"
         echo "if errorlevel 1 exit /b 1"

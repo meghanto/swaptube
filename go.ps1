@@ -259,7 +259,9 @@ try {
     Write-Host "go.ps1: Building $ProjectName with MSVC; output is $outputDir"
     Push-Location $buildDir
     try {
-        Invoke-Native { & $cmakeExecutable @cmakeArgs } 1 'CMake configuration'
+        if (-not (Test-Path -LiteralPath (Join-Path $buildDir 'build.ninja') -PathType Leaf)) {
+            Invoke-Native { & $cmakeExecutable @cmakeArgs } 1 'CMake configuration'
+        }
         $jobs = [Environment]::ProcessorCount
         Invoke-Native { & $ninjaExecutable "-j$jobs" } 1 'Compilation'
 
