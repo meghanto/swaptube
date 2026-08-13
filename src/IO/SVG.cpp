@@ -2,7 +2,7 @@
 
 #include <vector>
 #include <stdexcept>
-#include <librsvg-2.0/librsvg/rsvg.h>
+#include <librsvg/rsvg.h>
 #include <sys/stat.h>
 #include <cmath>
 #include <sstream>

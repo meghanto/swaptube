@@ -21,7 +21,7 @@ Permutation::Permutation(std::string file_name) {
         std::stringstream ss(line);
         std::string token;
         ss >> token;
-        cout << "Processing line: " << line << endl;
+        std::cout << "Processing line: " << line << std::endl;
 
         // Changement de section
         if (token == "places" || token == "pieces" || token == "orbits") {
