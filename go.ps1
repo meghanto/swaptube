@@ -268,6 +268,8 @@ try {
     if (-not $ninjaCommand) { throw "Required command 'ninja' was not found in the caller's PATH." }
     $cmakeExecutable = $cmakeCommand.Source
     $ninjaExecutable = $ninjaCommand.Source
+    $cmakeVersion = ((& $cmakeExecutable --version | Select-Object -First 1) -replace '^cmake version\s+', '').Trim()
+    $ninjaVersion = ((& $ninjaExecutable --version | Select-Object -First 1)).Trim()
 
     $vcVars = Find-VcVars64
     Import-VcVars64 $vcVars
@@ -295,7 +297,33 @@ try {
     try {
         $buildNinja = Join-Path $buildDir 'build.ninja'
         $cmakeCache = Join-Path $buildDir 'CMakeCache.txt'
+        $toolStatePath = Join-Path $buildDir 'swaptube-build-tools.json'
+        $toolState = [ordered]@{
+            cmake_path = $cmakeExecutable
+            cmake_version = $cmakeVersion
+            ninja_path = $ninjaExecutable
+            ninja_version = $ninjaVersion
+        }
         $needsConfigure = -not (Test-Path -LiteralPath $buildNinja -PathType Leaf)
+        if (-not $needsConfigure) {
+            $savedToolState = $null
+            if (Test-Path -LiteralPath $toolStatePath -PathType Leaf) {
+                try {
+                    $savedToolState = Get-Content -LiteralPath $toolStatePath -Raw | ConvertFrom-Json
+                } catch {
+                    Write-Host "go.ps1: Build-tool metadata is invalid; refreshing CMake configuration."
+                }
+            }
+            $toolChanged = -not $savedToolState -or
+                -not [string]::Equals($savedToolState.cmake_path, $cmakeExecutable, [StringComparison]::OrdinalIgnoreCase) -or
+                $savedToolState.cmake_version -ne $cmakeVersion -or
+                -not [string]::Equals($savedToolState.ninja_path, $ninjaExecutable, [StringComparison]::OrdinalIgnoreCase) -or
+                $savedToolState.ninja_version -ne $ninjaVersion
+            if ($toolChanged) {
+                Write-Host "go.ps1: Build tools changed; refreshing CMake configuration."
+                $needsConfigure = $true
+            }
+        }
         if (-not $needsConfigure -and (Test-Path -LiteralPath $cmakeCache -PathType Leaf)) {
             $cachedNinjaLine = Get-Content -LiteralPath $cmakeCache |
                 Where-Object { $_ -like 'CMAKE_MAKE_PROGRAM:*' } |
@@ -311,6 +339,7 @@ try {
         }
         if ($needsConfigure) {
             Invoke-Native { & $cmakeExecutable @cmakeArgs } 1 'CMake configuration'
+            $toolState | ConvertTo-Json | Set-Content -LiteralPath $toolStatePath -Encoding UTF8
         }
         $jobs = [Environment]::ProcessorCount
         Invoke-Native { & $ninjaExecutable "-j$jobs" } 1 'Compilation'
