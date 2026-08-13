@@ -239,7 +239,7 @@ try {
     $vcVars = Find-VcVars64
     Import-VcVars64 $vcVars
 
-    $cmakeArgs = @('-G', 'Ninja', '..', '-DCMAKE_BUILD_TYPE=Release', '-DCMAKE_CXX_COMPILER=cl.exe', "-DCOMPUTE_LANG=$ComputeLang")
+    $cmakeArgs = @('-G', 'Ninja', '..', '-DCMAKE_BUILD_TYPE=Release', "-DCOMPUTE_LANG=$ComputeLang")
     $msys2Root = Find-Msys2Root
     if ($msys2Root) {
         $cmakeArgs += "-DMSYS2_ROOT=$msys2Root"

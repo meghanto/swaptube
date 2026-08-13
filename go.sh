@@ -311,7 +311,7 @@ echo "go.sh: Building project ${PROJECT_NAME} with output folder name ${OUTPUT_F
         fi
         BUILD_DIR_WIN="$(cygpath -w "$PWD")"
         WINDOWS_RUNTIME_DIRS=""
-        WINDOWS_CMAKE_ARGS="-DCMAKE_CXX_COMPILER=cl.exe"
+        WINDOWS_CMAKE_ARGS=""
         if [ -n "${COMPUTE_LANG}" ]; then
             WINDOWS_CMAKE_ARGS="${WINDOWS_CMAKE_ARGS} -DCOMPUTE_LANG=${COMPUTE_LANG}"
         fi
