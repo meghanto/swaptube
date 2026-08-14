@@ -166,7 +166,7 @@ VideoWriter::VideoWriter(AVFormatContext *fc_, const string& video_path, int vid
     setenv("AMD_DEBUG", "notiling", 1);
     #endif
     #endif
-    av_log_set_level(AV_LOG_DEBUG);
+    av_log_set_level(AV_LOG_ERROR);
 
     // Validate dimensions are even (required for 4:2:0 subsampling)
     if ((video_width_pixels & 1) || (video_height_pixels & 1)) {

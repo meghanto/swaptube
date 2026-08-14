@@ -541,12 +541,12 @@ try {
         $audioHintsValue = [int]$AudioHints.IsPresent
         $audioSfxValue = [int]$AudioSfx.IsPresent
         if (-not $SkipSmoketest) {
-            Invoke-Native { & .\swaptube.exe 160 90 $Framerate $sampleRate smoketest $audioHintsValue $audioSfxValue 2>$null } 2 'Smoketest'
+            Invoke-Native { & .\swaptube.exe 160 90 $Framerate $sampleRate smoketest $audioHintsValue $audioSfxValue } 2 'Smoketest'
         }
         if (-not $SmoketestOnly) {
             Remove-Item -Path (Join-Path $ioOut '*') -Recurse -Force -ErrorAction SilentlyContinue
             New-Item -ItemType Directory -Force -Path (Join-Path $ioOut 'frames') | Out-Null
-            Invoke-Native { & .\swaptube.exe $VideoWidth $VideoHeight $Framerate $sampleRate render $audioHintsValue $audioSfxValue 2>$null } 2 'Render' -Interactive:($ProjectName -eq 'UIDemo')
+            Invoke-Native { & .\swaptube.exe $VideoWidth $VideoHeight $Framerate $sampleRate render $audioHintsValue $audioSfxValue } 2 'Render' -Interactive:($ProjectName -eq 'UIDemo')
         }
     } finally {
         Pop-Location
