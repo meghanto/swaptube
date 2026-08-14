@@ -5,6 +5,7 @@
 #include "../../IO/Writer.h"
 #include <vector>
 #include <string>
+#include <memory>
 
 enum Mp4EndBehavior {
     Loop,
@@ -21,6 +22,6 @@ private:
     int first_frame_this_video = 0;
     int current_video_index = 0;
     std::vector<std::string> video_filenames;
-    MP4FrameReader current_video_reader;
+    std::unique_ptr<MP4FrameReader> current_video_reader;
     Mp4EndBehavior end_behavior;
 };

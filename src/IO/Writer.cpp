@@ -18,6 +18,7 @@ Writer::Writer(int video_width_pixels, int video_height_pixels, int video_framer
     audio_samplerate_hz(audio_samplerate_hz),
     video_background_color(video_background_color)
 {
+    if (is_planning()) return;
     shtooka = new ShtookaWriter();
     subtitle = new SubtitleWriter();
 
@@ -33,6 +34,7 @@ Writer::Writer(int video_width_pixels, int video_height_pixels, int video_framer
 
 void Writer::destroy() {
     cout << "Destroying writer..." << endl;
+    if (is_planning()) return;
     delete shtooka;
     delete subtitle;
 

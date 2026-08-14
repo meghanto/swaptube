@@ -1,6 +1,7 @@
 #include <vector>
 
 #include "ManifoldScene.h"
+#include "../../Core/Smoketest.h"
 
 extern "C" void cuda_render_manifold(
     uint32_t* pixels, const ivec2& wh,
@@ -120,12 +121,14 @@ void ManifoldScene::draw() {
 }
 
 void ManifoldScene::set_texture(const Pixels& new_texture) {
+    texture_w = new_texture.wh.x;
+    texture_h = new_texture.wh.y;
+    if (is_planning()) return;
+
     if(d_texture_data) {
         cuda_free_texture(d_texture_data);
     }
     d_texture_data = cuda_copy_texture_to_device(new_texture.pixels.data(), new_texture.wh.x, new_texture.wh.y);
-    texture_w = new_texture.wh.x;
-    texture_h = new_texture.wh.y;
 }
 
 ManifoldScene::~ManifoldScene() {

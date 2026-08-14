@@ -11,6 +11,7 @@
 #include <gdk-pixbuf/gdk-pixbuf.h>
 #include <iostream>
 #include "../Core/Pixels.h"
+#include "../Core/Smoketest.h"
 
 using namespace std;
 
@@ -28,6 +29,8 @@ static gboolean get_svg_intrinsic_size(RsvgHandle *handle, gdouble* width, gdoub
 }
 
 shared_ptr<DevicePointer> svg_to_gpu_pix(const string& filename_with_or_without_suffix, ScalingParams& scaling_params) {
+    if (is_planning()) return make_shared<DevicePointer>(ivec2(1, 1));
+
     // Check if the filename already ends with ".svg"
     string filename = "io_in/" + filename_with_or_without_suffix;
     if (filename.length() < 4 || filename.substr(filename.length() - 4) != ".svg") {

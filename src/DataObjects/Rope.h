@@ -8,8 +8,8 @@
 class Rope {
     public:
 
-        vec2* d_nodes; //this is the first node's position actually
-        vec2* d_pins;
+        vec2* d_nodes = nullptr; //this is the first node's position actually
+        vec2* d_pins = nullptr;
 
         std::vector<vec2> h_pins;
 

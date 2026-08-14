@@ -1,4 +1,5 @@
 #include "RubiksScene.h"
+#include "../../Core/Smoketest.h"
 //#include <vector>
 //#include "ManifoldScene.h"
 
@@ -13,8 +14,9 @@ extern "C" void cuda_render_cube(
     const float& dist, char (*d_stickers)[6][MAX_CUBE_SIZE][MAX_CUBE_SIZE], const int cube_size, const float internal_plastic_opacity);
 
 void RubiksScene::on_end_transition_extra_behavior(const TransitionType tt) {
-
-    copy_stickers(d_stickers, the_cube.pattern.pattern, 6 * MAX_CUBE_SIZE * MAX_CUBE_SIZE);
+    if (!is_planning()) {
+        copy_stickers(d_stickers, the_cube.pattern.pattern, 6 * MAX_CUBE_SIZE * MAX_CUBE_SIZE);
+    }
     //cut = Cut(vec3(0, 0, 0), 0);
     rotation_quat = quat(1, 0, 0, 0);
 }
@@ -31,8 +33,10 @@ RubiksScene::RubiksScene(const vec2& dimensions) : ThreeDimensionScene(dimension
         {"fov", "2"},
         {"internal_plastic_opacity", "1"},
     });
-    allocate_stickers(&d_stickers, 6 * MAX_CUBE_SIZE * MAX_CUBE_SIZE);
-    copy_stickers(d_stickers, the_cube.pattern.pattern, 6 * MAX_CUBE_SIZE * MAX_CUBE_SIZE);
+    if (!is_planning()) {
+        allocate_stickers(&d_stickers, 6 * MAX_CUBE_SIZE * MAX_CUBE_SIZE);
+        copy_stickers(d_stickers, the_cube.pattern.pattern, 6 * MAX_CUBE_SIZE * MAX_CUBE_SIZE);
+    }
 }
 
 RubiksScene::RubiksScene(const CubeStickerPattern& pattern, const vec2& dimensions) : ThreeDimensionScene(dimensions), rotation_quat(1, 0, 0, 0),cut(vec3(0, 0, 0), 0) {
@@ -46,8 +50,10 @@ RubiksScene::RubiksScene(const CubeStickerPattern& pattern, const vec2& dimensio
         {"internal_plastic_opacity", "1"},
     });
     the_cube = Rubiks(pattern); // cube created here
-    allocate_stickers(&d_stickers, 6 * MAX_CUBE_SIZE * MAX_CUBE_SIZE);
-    copy_stickers(d_stickers, the_cube.pattern.pattern, 6 * MAX_CUBE_SIZE * MAX_CUBE_SIZE);
+    if (!is_planning()) {
+        allocate_stickers(&d_stickers, 6 * MAX_CUBE_SIZE * MAX_CUBE_SIZE);
+        copy_stickers(d_stickers, the_cube.pattern.pattern, 6 * MAX_CUBE_SIZE * MAX_CUBE_SIZE);
+    }
 }
 
 quat get_quat_from_axis_angle(const vec3& axis, float angle) {
@@ -58,6 +64,8 @@ quat get_quat_from_axis_angle(const vec3& axis, float angle) {
 
 void RubiksScene::exec_move_from_slice(const std::string& token) {
     the_cube.exec(token);
+    if (is_planning()) return;
+
     Move m = the_cube.parseMove(token);
     float size = state["cube_size"];
     float distance = -1.0f + (2.0f * static_cast<float>(size - m.depth - 1)) / static_cast<float>(size);

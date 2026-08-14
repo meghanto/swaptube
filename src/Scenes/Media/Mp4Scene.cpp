@@ -21,7 +21,6 @@ Mp4Scene::Mp4Scene(
     first_frame_this_video(0),
     current_video_index(0),
     video_filenames(mp4_filenames),
-    current_video_reader(mp4_filenames[0]),
     end_behavior(behavior)
 {
     manager.begin_timer("MP4_Frame");
@@ -29,20 +28,23 @@ Mp4Scene::Mp4Scene(
 }
 
 void Mp4Scene::draw() {
+    if (!current_video_reader) {
+        current_video_reader = make_unique<MP4FrameReader>(video_filenames[0]);
+    }
     int current_frame = state["current_frame"];
     int current_frame_adjusted = current_frame - first_frame_this_video;
     cout << "rendering concatenated mp4 videos, frame " << to_string(current_frame_adjusted) << endl;
 
     // Load the current video frame into a Pixels object.
     Pixels frame;
-    bool no_more_frames = current_video_reader.get_frame(current_frame_adjusted, get_width(), get_height(), frame);
+    bool no_more_frames = current_video_reader->get_frame(current_frame_adjusted, get_width(), get_height(), frame);
     if (no_more_frames) {
         if (end_behavior == Mp4EndBehavior::Stop) return;
         cout << "No more frames!" << endl;
         first_frame_this_video = current_frame;
         current_video_index = (current_video_index + 1) % video_filenames.size();
-        current_video_reader.change_video(video_filenames[current_video_index]);
-        current_video_reader.get_frame(0, get_width(), get_height(), frame);
+        current_video_reader->change_video(video_filenames[current_video_index]);
+        current_video_reader->get_frame(0, get_width(), get_height(), frame);
     }
 
     uint32_t* frame_ptr = cuda_alloc_pixels_on_device(frame.wh.x * frame.wh.y);

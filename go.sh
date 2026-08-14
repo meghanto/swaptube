@@ -225,9 +225,19 @@ echo "go.sh: Building project ${PROJECT_NAME} with output folder name ${OUTPUT_F
     rm -rf io_in
     ln -s "../${INPUT_DIR}" io_in
 
+    MICROBLOCK_PLAN_PATH="$(pwd)/.swaptube-microblock-plan-$$-${RANDOM}"
+    trap 'rm -f "$MICROBLOCK_PLAN_PATH"' EXIT
+
+    # Count the project's actual microblocks before any timed rendering starts.
+    ./swaptube 320 180 "$FRAMERATE" "$SAMPLERATE" plan "$AUDIO_HINTS" "$AUDIO_SFX" "$MICROBLOCK_PLAN_PATH"
+    if [ $? -ne 0 ]; then
+        echo "go.sh: Execution failed while planning microblocks."
+        exit 2
+    fi
+
     # Smoketest
     if [ $SKIP_SMOKETEST -eq 0 ]; then
-        ./swaptube 320 180 $FRAMERATE $SAMPLERATE smoketest $AUDIO_HINTS $AUDIO_SFX
+        ./swaptube 320 180 "$FRAMERATE" "$SAMPLERATE" smoketest "$AUDIO_HINTS" "$AUDIO_SFX" "$MICROBLOCK_PLAN_PATH"
         if [ $? -ne 0 ]; then
             echo "go.sh: Execution failed in smoketest."
             exit 2
@@ -239,7 +249,7 @@ echo "go.sh: Building project ${PROJECT_NAME} with output folder name ${OUTPUT_F
         # Clear all files from the smoketest
         rm io_out/* -rf
         mkdir -p io_out/frames
-        ./swaptube $VIDEO_WIDTH $VIDEO_HEIGHT $FRAMERATE $SAMPLERATE render $AUDIO_HINTS $AUDIO_SFX
+        ./swaptube "$VIDEO_WIDTH" "$VIDEO_HEIGHT" "$FRAMERATE" "$SAMPLERATE" render "$AUDIO_HINTS" "$AUDIO_SFX" "$MICROBLOCK_PLAN_PATH"
         if [ $? -ne 0 ]; then
             echo "go.sh: Execution failed in render."
             exit 2

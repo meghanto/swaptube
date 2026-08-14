@@ -30,9 +30,11 @@ void LatexScene::begin_latex_transition(const TransitionType tt, const string& l
     if(transitioning) {
         throw runtime_error("LatexScene: Already transitioning. Cannot begin a new transition until the current one finishes.");
     }
-    ScalingParams sp(get_width_height());
     transitioning = true;
     transition_type = tt;
+    if (is_planning()) return;
+
+    ScalingParams sp(get_width_height());
     last_pixels = next_pixels;
     next_pixels = latex_to_gpu_pix(l, sp);
     Pixels last_pixels_cpu(last_pixels->get_wh());
@@ -63,7 +65,7 @@ void LatexScene::draw() {
 }
 
 void LatexScene::on_end_transition_extra_behavior(const TransitionType tt) {
-    if (transitioning && (transition_type == MICRO || tt == MACRO)) {
+    if (transitioning && (is_planning() || transition_type == MICRO || tt == MACRO)) {
         last_pixels = next_pixels;
         transitioning = false;
     }

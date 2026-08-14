@@ -11,6 +11,7 @@
 #include <gdk-pixbuf/gdk-pixbuf.h>
 #include <iostream>
 #include "ScalingParams.h"
+#include "../Core/Smoketest.h"
 
 using namespace std;
 
@@ -129,6 +130,11 @@ void pix_to_png(const Pixels& pix, const string& full_filename) {
 }
 
 void png_to_pix(Pixels& pix, const string& filename_with_or_without_suffix) {
+    if (is_planning()) {
+        pix = Pixels(ivec2(1, 1));
+        return;
+    }
+
     // Check if the filename already ends with ".png"
     string filename = filename_with_or_without_suffix;
     if (filename.length() < 4 || filename.substr(filename.length() - 4) != ".png") {
@@ -324,6 +330,10 @@ void pdf_page_to_pix(Pixels& pix, const string& pdf_filename_without_suffix, con
     const string resolved_filename_without_suffix = "io_in/" + pdf_filename_without_suffix;
     if (resolved_filename_without_suffix.length() >= 4 && resolved_filename_without_suffix.substr(resolved_filename_without_suffix.length() - 4) == ".pdf") {
         throw runtime_error("pdf_page_to_pix: please provide the pdf filename without the .pdf suffix.");
+    }
+    if (is_planning()) {
+        pix = Pixels(ivec2(1, 1));
+        return;
     }
     const string resolved_filename_with_suffix = resolved_filename_without_suffix + ".pdf";
 

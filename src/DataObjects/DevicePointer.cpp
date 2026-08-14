@@ -1,5 +1,6 @@
 #include <cstdint>
 #include "DevicePointer.h"
+#include "../Core/Smoketest.h"
 #include "../IO/Writer.h"
 
 extern "C" void cuda_free_pixels_on_device(uint32_t* d_pixels);
@@ -8,24 +9,33 @@ extern "C" void cuda_copy_pixels_to_host(uint32_t* h_pixels, int size, uint32_t*
 extern "C" void cuda_copy_pixels_to_device(uint32_t* h_pixels, int size, uint32_t* d_pixels);
 
 DevicePointer::DevicePointer(const ivec2& wh) : wh(wh) {
+    if (is_planning()) {
+        device_ptr = nullptr;
+        return;
+    }
     cout << "Allocating device pointer of size " << wh.x << " by " << wh.y << endl;
     device_ptr = cuda_alloc_pixels_on_device(wh.x*wh.y);
 }
 
-DevicePointer::DevicePointer() : wh(ivec2(0,0)) { }
+DevicePointer::DevicePointer() : wh(ivec2(0,0)), device_ptr(nullptr) { }
 
 DevicePointer::~DevicePointer() {
     //cout << "Freeing device pointer of size " << wh.x << " by " << wh.y << endl;
-    cuda_free_pixels_on_device(device_ptr);
+    if (device_ptr != nullptr) cuda_free_pixels_on_device(device_ptr);
 }
 
 void DevicePointer::resize(const ivec2& new_wh) {
+    if (is_planning()) {
+        wh = new_wh;
+        return;
+    }
     cuda_free_pixels_on_device(device_ptr);
     device_ptr = cuda_alloc_pixels_on_device(new_wh.x * new_wh.y);
     wh = new_wh;
 }
 
 void DevicePointer::tick(const ivec2& scale) {
+    if (is_planning()) return;
     // Reallocate only if size is too small
     // TODO this does not handle nested scenes, assuming all scenes are children of the whole video's frame size
     if (wh.x * wh.y < scale.x * scale.y) {
@@ -34,10 +44,12 @@ void DevicePointer::tick(const ivec2& scale) {
 }
 
 void DevicePointer::copy_to_host(uint32_t* host_ptr) {
+    if (is_planning()) return;
     cuda_copy_pixels_to_host(host_ptr, wh.x * wh.y, device_ptr);
 }
 
 void DevicePointer::copy_to_device(uint32_t* host_ptr) {
+    if (is_planning()) return;
     cuda_copy_pixels_to_device(host_ptr, wh.x * wh.y, device_ptr);
 }
 

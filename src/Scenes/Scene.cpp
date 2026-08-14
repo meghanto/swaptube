@@ -1,4 +1,5 @@
 #include "Scene.h"
+#include "../Core/MicroblockPlan.h"
 #include "../Core/Smoketest.h"
 #include "../IO/PNG.h"
 #include "../IO/Writer.h"
@@ -12,7 +13,23 @@ int remaining_frames_in_macroblock = 0;
 int total_microblocks_in_macroblock = 0;
 int total_frames_in_macroblock = 0;
 
-void stage_macroblock(const Macroblock& macroblock, int expected_microblocks_in_macroblock){
+namespace {
+void stage_macroblock_impl(const Macroblock& macroblock, const optional<int> declared_microblocks_in_macroblock) {
+    const string macroblock_blurb = macroblock.blurb();
+
+    if (is_planning()) {
+        int declared_count = begin_macroblock_plan_entry(macroblock_blurb, declared_microblocks_in_macroblock);
+        total_microblocks_in_macroblock = declared_count;
+        remaining_microblocks_in_macroblock = declared_count;
+        total_frames_in_macroblock = 0;
+        remaining_frames_in_macroblock = 0;
+        return;
+    }
+
+    int expected_microblocks_in_macroblock = begin_macroblock_plan_entry(
+        macroblock_blurb,
+        declared_microblocks_in_macroblock
+    );
     if (expected_microblocks_in_macroblock <= 0) {
         throw runtime_error("ERROR: Staged a macroblock with non-positive microblock count. (" + to_string(expected_microblocks_in_macroblock) + " microblocks)");
     }
@@ -33,7 +50,7 @@ void stage_macroblock(const Macroblock& macroblock, int expected_microblocks_in_
     cout << "Set total frames in macroblock to " << to_string(total_frames_in_macroblock) << ". We are " << (rendering_on() ? "rendering" : "smoketesting") << "." << endl;
     remaining_frames_in_macroblock = total_frames_in_macroblock;
 
-    cout << endl << macroblock.blurb() << " staged to last " << to_string(expected_microblocks_in_macroblock) << " microblock(s), " << to_string(total_frames_in_macroblock) << " frame(s)." << endl;
+    cout << endl << macroblock_blurb << " staged to last " << to_string(expected_microblocks_in_macroblock) << " microblock(s), " << to_string(total_frames_in_macroblock) << " frame(s)." << endl;
 
     double macroblock_length_seconds = static_cast<double>(total_frames_in_macroblock) / get_video_framerate_fps();
 
@@ -59,6 +76,24 @@ void stage_macroblock(const Macroblock& macroblock, int expected_microblocks_in_
         }
     } // Audio hints
 }
+}
+
+void stage_macroblock(const Macroblock& macroblock) {
+    stage_macroblock_impl(macroblock, nullopt);
+}
+
+void stage_macroblock(const Macroblock& macroblock, const int declared_microblocks_in_macroblock) {
+    stage_macroblock_impl(macroblock, declared_microblocks_in_macroblock);
+}
+
+void finalize_macroblock_sequence() {
+    if (!is_planning() && remaining_microblocks_in_macroblock != 0) {
+        throw runtime_error("ERROR: Project ended before finishing its final macroblock. This macroblock had "
+            + to_string(total_microblocks_in_macroblock) + " microblocks, but render_microblock() was only called "
+            + to_string(total_microblocks_in_macroblock - remaining_microblocks_in_macroblock) + " times.");
+    }
+    finalize_microblock_plan();
+}
 
 Scene::Scene(const vec2& dimensions) : gpu_pix(floor(get_video_dimensions_pixels() * dimensions)) {
     manager.set({
@@ -83,6 +118,8 @@ void Scene::update() {
 }
 
 uint32_t* Scene::query() {
+    if (is_planning()) return nullptr;
+
     cout << "(" << flush;
     if(!has_updated_since_last_query) update();
 
@@ -98,6 +135,12 @@ uint32_t* Scene::query() {
 }
 
 void Scene::render_microblock(){
+    if (is_planning()) {
+        record_planned_microblock();
+        if (remaining_microblocks_in_macroblock > 0) remaining_microblocks_in_macroblock--;
+        on_end_transition(MICRO);
+        return;
+    }
     cout << "{" << flush;
     if (remaining_microblocks_in_macroblock == 0) {
         throw runtime_error("ERROR: Attempted to render video, without having added audio first!\nYou probably forgot to stage_macroblock()!\nOr perhaps you staged too few microblocks- " + to_string(total_microblocks_in_macroblock) + " were staged, but there should have been more.");

@@ -338,7 +338,7 @@ endif()
 # Add globbed cpp files: all .cpp files in src, including subdirectories.
 # Exclude the src/Projects/ directory.
 # Include, however, src/Projects/.active_project.cpp
-file(GLOB_RECURSE SOURCES "src/*.cpp")
+file(GLOB_RECURSE SOURCES CONFIGURE_DEPENDS "src/*.cpp")
 list(FILTER SOURCES EXCLUDE REGEX "src/Projects/.*")
 file(GLOB_RECURSE ACTIVE_PROJECT_SOURCE "src/Projects/.active_project.cpp")
 

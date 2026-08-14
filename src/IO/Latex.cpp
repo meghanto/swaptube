@@ -12,6 +12,7 @@
 #include <iostream>
 #include <iomanip>
 #include <filesystem>
+#include "../Core/Smoketest.h"
 
 #ifdef _WIN32
 #define WIN32_LEAN_AND_MEAN
@@ -133,6 +134,8 @@ static string generate_cache_key(const string& text, const ScalingParams& scalin
  * We use MicroTEX to convert LaTeX equations into svg files.
  */
 shared_ptr<DevicePointer> latex_to_gpu_pix(const string& latex, ScalingParams& scaling_params) {
+    if (is_planning()) return make_shared<DevicePointer>(ivec2(1, 1));
+
     // Generate a cache key based on the equation and scaling parameters
     string cache_key = generate_cache_key(latex, scaling_params);
 
@@ -181,6 +184,8 @@ shared_ptr<DevicePointer> latex_to_gpu_pix(const string& latex, ScalingParams& s
 }
 
 void write_text(uint32_t* gpu_pix, const ivec2& canvas_wh, const std::string& latex, const vec2& center, const vec2& text_envelope, const double opacity, const float angle_rad) {
+    if (is_planning()) return;
+
     ScalingParams scaling_params(text_envelope);
 
     shared_ptr<DevicePointer> text = latex_to_gpu_pix(latex, scaling_params);

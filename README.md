@@ -115,13 +115,15 @@ Furthermore, this permits native transitions: since a transition occurs over eit
 ##### Macroblocks
 There are a few types of macroblocks: FileBlocks, SilenceBlocks, GeneratedBlocks, etc. FileBlocks are defined by a filepath to an audio file inside the media folder.
 SilenceBlocks are defined by a duration in seconds, and GeneratedBlocks are defined by a buffered array of audio samples generated in the project file.
-A macroblock can be created using `yourscene.stage_macroblock(FileBlock("youraudio_no_file_extension"), 2);` which stages the macroblock to contain 2 microblocks.
+A macroblock can be created using `stage_macroblock(FileBlock("your subtitle text"));`. SwapTube runs a fast planning pass before smoketesting or rendering and counts the actual `render_microblock()` calls associated with each macroblock. The existing two-argument form remains supported; SwapTube warns if its declared count differs from planning and uses the observed count.
 
 ##### Microblocks
-After a Macroblock has been staged with `n` microblocks, the project file will render each microblock by calling `yourscene.render_microblock();`. Be sure to call this function `n` times, or else SwapTube will failout.
+After a Macroblock has been staged, the project file renders each microblock by calling `yourscene.render_microblock();`. These calls may appear in ordinary loops and conditionals; no separate predicted count is required. Planning, smoketesting, and rendering must follow the same macroblock and microblock control flow, and SwapTube reports a plan mismatch if they do not. Project control flow must not depend on pixels, encoded output, or other state produced only while rendering; the planning pass deliberately skips that work.
 
 ### Smoketesting
-In order to ensure that BOTH your time control is defined correctly (the appropriate number of microblocks are rendered) and that the project file does not crash due to a runtime error in the project file definition WITHOUT potentially kicking off a multi-hour render, Swaptube has a `smoketest` feature. By default, smoketest is always run on any Swaptube run.
+Before smoketesting or rendering, SwapTube runs a count-only planning pass. It performs no timed rendering or encoding and stores its result in a temporary file for the current invocation. SwapTube then uses those counts to divide each macroblock's duration among its microblocks.
+
+To ensure that the planned time control is valid and that the project does not crash before potentially kicking off a multi-hour render, SwapTube also has a `smoketest` feature. By default, smoketest is run after planning.
 
 Things that happen during smoketesting:
 - One frame per microblock is staged and rendered
@@ -133,7 +135,7 @@ Things that do NOT happen during smoketesting:
 - No video or audio is encoded or rendered
 - Since nothing is rendered, occasional frames are not drawn to stdout
 
-You can run `./go.sh MyProjectName 640 360 -s`, using the -s flag to indicate "smoketest only". Using this flag merely skips the full render after the smoketest.
+You can run `./go.sh MyProjectName 640 360 -s`, using the `-s` flag to indicate "planning and smoketest only". The `-n` flag skips the smoketest but still runs the required planning pass before the full render.
 
 In addition to smoketesting, there is an additional exposed boolean variable `FOR_REAL` which can be toggled to true or false in the project file, effectively enabling smoketest mode for sections of a true render. This allows you to, say, work on the last section of a video without having to re-render the beginning each time.
 

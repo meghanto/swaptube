@@ -12,8 +12,10 @@ using namespace std;
 #endif
 
 #include "Timer.h"
+#include "MicroblockPlan.h"
 #include "Smoketest.h"
 #include "../IO/Writer.h"
+#include "../Scenes/Scene.h"
 #include "State/GlobalState.h"
 #include <filesystem>
 
@@ -48,11 +50,11 @@ private:
 
 void render_video(); // Forward declaration, provided by the user in their project file
 
-void parse_args(int argc, char* argv[], int& w, int& h, int& framerate, int& samplerate, bool& audio_hints, bool& audio_sfx) {
+void parse_args(int argc, char* argv[], int& w, int& h, int& framerate, int& samplerate, bool& audio_hints, bool& audio_sfx, string& microblock_plan_path) {
     cout << "Parsing command line arguments... " << endl;
 
-    if (argc != 8) {
-        throw runtime_error("Expected 7 arguments: width height framerate samplerate output_dir smoketest/render audio_hints audio_sfx");
+    if (argc != 9) {
+        throw runtime_error("Expected 8 arguments: width height framerate samplerate plan/smoketest/render audio_hints audio_sfx microblock_plan_path");
     }
 
     if (sscanf(argv[1], "%d", &w) != 1 || w < 1 || w > 10000) {
@@ -78,14 +80,16 @@ void parse_args(int argc, char* argv[], int& w, int& h, int& framerate, int& sam
     cout << "Samplerate: " << samplerate << ", " << flush;
 
     string smoketest_arg = argv[5];
-    if (smoketest_arg == "smoketest") {
-        set_smoketest(true);
+    if (smoketest_arg == "plan") {
+        set_execution_mode(ExecutionMode::PLAN);
+    } else if (smoketest_arg == "smoketest") {
+        set_execution_mode(ExecutionMode::SMOKETEST);
     } else if (smoketest_arg == "render") {
-        set_smoketest(false);
+        set_execution_mode(ExecutionMode::RENDER);
     } else {
         throw runtime_error("Invalid smoketest flag argument: " + smoketest_arg);
     }
-    cout << "Smoketest: " << (is_smoketest() ? "true" : "false") << ", " << flush;
+    cout << "Execution Mode: " << smoketest_arg << ", " << flush;
 
     if(samplerate % framerate != 0) {
         throw runtime_error("Video framerate must be divisible by audio sample rate.");
@@ -103,7 +107,13 @@ void parse_args(int argc, char* argv[], int& w, int& h, int& framerate, int& sam
         throw runtime_error("Invalid audio sfx argument: " + string(argv[7]) );
     }
     audio_sfx = (audio_sfx_i != 0);
-    cout << "Audio SFX: " << (audio_sfx ? "true" : "false") << endl << endl;
+    cout << "Audio SFX: " << (audio_sfx ? "true" : "false") << ", " << flush;
+
+    microblock_plan_path = argv[8];
+    if (microblock_plan_path.empty()) {
+        throw runtime_error("Microblock plan path cannot be empty");
+    }
+    cout << "Microblock Plan: " << microblock_plan_path << endl << endl;
 }
 
 inline void signal_handler(int signal) {
@@ -124,16 +134,19 @@ int main(int argc, char* argv[]) {
 
     int VIDEO_WIDTH, VIDEO_HEIGHT, FRAMERATE, SAMPLERATE;
     bool AUDIO_HINTS, AUDIO_SFX;
-    parse_args(argc, argv, VIDEO_WIDTH, VIDEO_HEIGHT, FRAMERATE, SAMPLERATE, AUDIO_HINTS, AUDIO_SFX);
+    string microblock_plan_path;
+    parse_args(argc, argv, VIDEO_WIDTH, VIDEO_HEIGHT, FRAMERATE, SAMPLERATE, AUDIO_HINTS, AUDIO_SFX, microblock_plan_path);
     Timer timer;
 
     // Main Render Loop
     signal(SIGINT, signal_handler);
     try {
-        setup_output_subfolders();
+        if (!is_planning()) setup_output_subfolders();
         init_writer(VIDEO_WIDTH, VIDEO_HEIGHT, FRAMERATE, SAMPLERATE, 0xff000044, AUDIO_HINTS, AUDIO_SFX);
+        initialize_microblock_plan(microblock_plan_path);
         cout << "Rendering video... " << endl;
         render_video();
+        finalize_macroblock_sequence();
     } catch(std::exception& e) {
         // Change to red text
         cout << "\033[1;31m";
@@ -141,7 +154,9 @@ int main(int argc, char* argv[]) {
         cout << endl << "====================" << endl;
         cout << "EXCEPTION CAUGHT IN RUNTIME: " << endl;
         cout << e.what() << endl;
-        cout << "Last written subtitle: " << get_writer().subtitle->get_last_written_subtitle() << endl;
+        if (get_writer().subtitle != nullptr) {
+            cout << "Last written subtitle: " << get_writer().subtitle->get_last_written_subtitle() << endl;
+        }
         cout << "====================" << endl;
 
         // Change back to normal text
