@@ -5,11 +5,46 @@
 
 using namespace std;
 
+#ifdef _WIN32
+#define NOMINMAX
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
+#endif
+
 #include "Timer.h"
 #include "Smoketest.h"
 #include "../IO/Writer.h"
 #include "State/GlobalState.h"
 #include <filesystem>
+
+#ifdef _WIN32
+namespace {
+class ConsoleOutputCodePageGuard {
+public:
+    ConsoleOutputCodePageGuard() {
+        HANDLE output = GetStdHandle(STD_OUTPUT_HANDLE);
+        DWORD mode = 0;
+        if (output == nullptr || output == INVALID_HANDLE_VALUE || !GetConsoleMode(output, &mode)) return;
+
+        original_code_page = GetConsoleOutputCP();
+        if (original_code_page != 0 && original_code_page != CP_UTF8) {
+            changed = SetConsoleOutputCP(CP_UTF8) != 0;
+        }
+    }
+
+    ~ConsoleOutputCodePageGuard() {
+        if (changed) SetConsoleOutputCP(original_code_page);
+    }
+
+    ConsoleOutputCodePageGuard(const ConsoleOutputCodePageGuard&) = delete;
+    ConsoleOutputCodePageGuard& operator=(const ConsoleOutputCodePageGuard&) = delete;
+
+private:
+    UINT original_code_page = 0;
+    bool changed = false;
+};
+}
+#endif
 
 void render_video(); // Forward declaration, provided by the user in their project file
 
@@ -83,6 +118,10 @@ void setup_output_subfolders() {
 }
 
 int main(int argc, char* argv[]) {
+#ifdef _WIN32
+    ConsoleOutputCodePageGuard console_output_code_page;
+#endif
+
     int VIDEO_WIDTH, VIDEO_HEIGHT, FRAMERATE, SAMPLERATE;
     bool AUDIO_HINTS, AUDIO_SFX;
     parse_args(argc, argv, VIDEO_WIDTH, VIDEO_HEIGHT, FRAMERATE, SAMPLERATE, AUDIO_HINTS, AUDIO_SFX);
