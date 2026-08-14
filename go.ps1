@@ -70,6 +70,123 @@ function Import-VcVars64([string]$VcVarsPath) {
     # developer shell can retain enough stale VS variables to exceed cmd.exe's
     # 8191-character input-line limit even after PATH itself is shortened.
     $originalPath = $env:PATH
+
+    $cachePath = Join-Path $buildDir 'vcvars_cache.json'
+    $cacheIsValid = $false
+    $cachedData = $null
+
+    # 1. Gather current state key
+    $canonicalVcVars = (Get-Item -LiteralPath $VcVarsPath).FullName
+    $vcVarsItem = Get-Item -LiteralPath $canonicalVcVars
+    $vcVarsLastWrite = $vcVarsItem.LastWriteTimeUtc.Ticks
+    $vcVarsLength = $vcVarsItem.Length
+
+    $sdkMsvcState = @()
+    try {
+        $vcDir = Split-Path (Split-Path (Split-Path $canonicalVcVars -Parent) -Parent) -Parent
+        $msvcToolsDir = Join-Path $vcDir 'Tools\MSVC'
+        if (Test-Path -LiteralPath $msvcToolsDir -PathType Container) {
+            foreach ($d in Get-ChildItem -LiteralPath $msvcToolsDir -Directory) {
+                $sdkMsvcState += @{
+                    Path = $d.FullName
+                    LastWrite = $d.LastWriteTimeUtc.Ticks
+                }
+            }
+        }
+    } catch {}
+
+    try {
+        $kitsPaths = @(
+            "${env:ProgramFiles(x86)}\Windows Kits\10",
+            "$env:ProgramFiles\Windows Kits\10",
+            "${env:ProgramFiles(x86)}\Windows Kits\11",
+            "$env:ProgramFiles\Windows Kits\11"
+        )
+        foreach ($kitPath in $kitsPaths) {
+            if (Test-Path -LiteralPath $kitPath -PathType Container) {
+                foreach ($sub in @('Lib', 'Include')) {
+                    $subPath = Join-Path $kitPath $sub
+                    if (Test-Path -LiteralPath $subPath -PathType Container) {
+                        foreach ($d in Get-ChildItem -LiteralPath $subPath -Directory) {
+                            $sdkMsvcState += @{
+                                Path = $d.FullName
+                                LastWrite = $d.LastWriteTimeUtc.Ticks
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    } catch {}
+
+    # Sort state by path to keep it deterministic
+    $sdkMsvcState = $sdkMsvcState | Sort-Object -Property Path
+
+    $currentKey = [ordered]@{
+        SchemaVersion = 1
+        VcVarsPath = $canonicalVcVars
+        VcVarsLastWriteTimeUtc = $vcVarsLastWrite
+        VcVarsLength = $vcVarsLength
+        ProcessorArchitecture = $env:PROCESSOR_ARCHITECTURE
+        SdkMsvcState = $sdkMsvcState
+    }
+
+    # Try to load and validate cache
+    if (Test-Path -LiteralPath $cachePath -PathType Leaf) {
+        try {
+            $cachedData = Get-Content -LiteralPath $cachePath -Raw | ConvertFrom-Json
+            if ($cachedData -and $cachedData.Metadata -and $cachedData.Environment) {
+                $meta = $cachedData.Metadata
+                if (($meta.SchemaVersion -eq 1) -and
+                    ($meta.VcVarsPath -eq $currentKey.VcVarsPath) -and
+                    ([long]$meta.VcVarsLastWriteTimeUtc -eq $currentKey.VcVarsLastWriteTimeUtc) -and
+                    ([long]$meta.VcVarsLength -eq $currentKey.VcVarsLength) -and
+                    ($meta.ProcessorArchitecture -eq $currentKey.ProcessorArchitecture)) {
+
+                    $cachedState = @($meta.SdkMsvcState)
+                    $currentState = @($currentKey.SdkMsvcState)
+
+                    if ($cachedState.Count -eq $currentState.Count) {
+                        $stateMatch = $true
+                        for ($i = 0; $i -lt $currentState.Count; $i++) {
+                            $cachedItem = $cachedState[$i]
+                            $currentItem = $currentState[$i]
+                            if (($cachedItem.Path -ne $currentItem.Path) -or ([long]$cachedItem.LastWrite -ne [long]$currentItem.LastWrite)) {
+                                $stateMatch = $false
+                                break
+                            }
+                        }
+                        if ($stateMatch) {
+                            $cacheIsValid = $true
+                        }
+                    }
+                }
+            }
+        } catch {
+            # Corrupt cache must silently regenerate
+            $cacheIsValid = $false
+        }
+    }
+
+    if ($cacheIsValid -and $cachedData.Environment.PATH) {
+        # Restore environment variables
+        foreach ($prop in $cachedData.Environment.PSObject.Properties) {
+            if ($prop.Name -ne 'PATH') {
+                [Environment]::SetEnvironmentVariable($prop.Name, $prop.Value, 'Process')
+            }
+        }
+
+        $vcPath = $cachedData.Environment.PATH
+        $callerPath = @($originalPath -split ';') |
+            Where-Object { $_ -and $_ -notmatch '(?i)\\Microsoft Visual Studio\\|\\Windows Kits\\' }
+        $mergedPath = @(($vcPath -split ';') + $callerPath) |
+            Where-Object { $_ } |
+            Select-Object -Unique
+        $env:PATH = $mergedPath -join ';'
+        return
+    }
+
+    # Minimal Path and Child Process setup
     $minimalPath = @(
         (Join-Path $env:SystemRoot 'System32'),
         $env:SystemRoot,
@@ -111,17 +228,43 @@ function Import-VcVars64([string]$VcVarsPath) {
     }
 
     $vcPath = $null
+    $envToCache = [ordered]@{}
     $environmentLines = $environmentText -split '\r?\n'
     foreach ($line in $environmentLines) {
         if ($line -match '^([^=][^=]*)=(.*)$') {
-            if ($matches[1] -ieq 'PATH') {
-                $vcPath = $matches[2]
+            $name = $matches[1]
+            $value = $matches[2]
+            if ($name -ieq 'PATH') {
+                $vcPath = $value
+                $envToCache['PATH'] = $value
             } else {
-                [Environment]::SetEnvironmentVariable($matches[1], $matches[2], 'Process')
+                if ($baselineNames -notcontains $name) {
+                    [Environment]::SetEnvironmentVariable($name, $value, 'Process')
+                    $envToCache[$name] = $value
+                }
             }
         }
     }
     if (-not $vcPath) { throw 'vcvars64.bat did not return a PATH variable.' }
+
+    # Write cache atomically if practical
+    try {
+        if (-not (Test-Path -LiteralPath $buildDir -PathType Container)) {
+            New-Item -ItemType Directory -Force -Path $buildDir | Out-Null
+        }
+        $cacheData = [ordered]@{
+            Metadata = $currentKey
+            Environment = $envToCache
+        }
+        $tempPath = "$cachePath.tmp"
+        $cacheData | ConvertTo-Json -Depth 20 | Set-Content -LiteralPath $tempPath -Encoding UTF8
+        if (Test-Path -LiteralPath $cachePath) {
+            Remove-Item -LiteralPath $cachePath -Force -ErrorAction SilentlyContinue
+        }
+        Move-Item -LiteralPath $tempPath -Destination $cachePath -Force
+    } catch {
+        # Silently ignore cache write failures
+    }
 
     $callerPath = @($originalPath -split ';') |
         Where-Object { $_ -and $_ -notmatch '(?i)\\Microsoft Visual Studio\\|\\Windows Kits\\' }
@@ -155,6 +298,103 @@ function Assert-Msys2PackageLock([string]$Msys2Root) {
         throw "Unable to verify MSYS2 dependency versions because pacman.exe was not found at $pacman"
     }
 
+    # Gather cache keys
+    $lockHash = ""
+    try {
+        $hasher = [System.Security.Cryptography.SHA256]::Create()
+        $inputStream = [System.IO.File]::OpenRead($lockPath)
+        $hashBytes = $hasher.ComputeHash($inputStream)
+        $inputStream.Close()
+        $lockHash = [System.BitConverter]::ToString($hashBytes).Replace("-", "").ToLower()
+    } catch {
+        $lockHash = "error"
+    }
+
+    $pacmanItem = Get-Item -LiteralPath $pacman
+    $pacmanLastWrite = $pacmanItem.LastWriteTimeUtc.Ticks
+    $pacmanLength = $pacmanItem.Length
+
+    $dbDir = Join-Path $Msys2Root 'var\lib\pacman\local'
+    $dbState = @()
+    if (Test-Path -LiteralPath $dbDir -PathType Container) {
+        try {
+            foreach ($d in Get-ChildItem -LiteralPath $dbDir -Directory) {
+                $dbState += @{
+                    Name = $d.Name
+                    LastWrite = $d.LastWriteTimeUtc.Ticks
+                }
+            }
+        } catch {}
+    }
+    $dbState = $dbState | Sort-Object -Property Name
+
+    $canonicalMsys2Root = (Get-Item -LiteralPath $Msys2Root).FullName
+    $currentMsysKey = [ordered]@{
+        SchemaVersion = 1
+        Msys2Root = $canonicalMsys2Root
+        LockHash = $lockHash
+        PacmanLastWriteTimeUtc = $pacmanLastWrite
+        PacmanLength = $pacmanLength
+        DbState = $dbState
+    }
+
+    $msysCachePath = Join-Path $buildDir 'msys_validation_cache.json'
+    $msysCacheIsValid = $false
+
+    if (Test-Path -LiteralPath $msysCachePath -PathType Leaf) {
+        try {
+            $cachedMsysData = Get-Content -LiteralPath $msysCachePath -Raw | ConvertFrom-Json
+            if ($cachedMsysData) {
+                if (($cachedMsysData.SchemaVersion -eq 1) -and
+                    ($cachedMsysData.Msys2Root -eq $currentMsysKey.Msys2Root) -and
+                    ($cachedMsysData.LockHash -eq $currentMsysKey.LockHash) -and
+                    ([long]$cachedMsysData.PacmanLastWriteTimeUtc -eq $currentMsysKey.PacmanLastWriteTimeUtc) -and
+                    ([long]$cachedMsysData.PacmanLength -eq $currentMsysKey.PacmanLength)) {
+
+                    $cachedDbState = @($cachedMsysData.DbState)
+                    $currentDbState = @($currentMsysKey.DbState)
+
+                    if ($cachedDbState.Count -eq $currentDbState.Count) {
+                        $stateMatch = $true
+                        for ($i = 0; $i -lt $currentDbState.Count; $i++) {
+                            $cachedItem = $cachedDbState[$i]
+                            $currentItem = $currentDbState[$i]
+                            if (($cachedItem.Name -ne $currentItem.Name) -or ([long]$cachedItem.LastWrite -ne [long]$currentItem.LastWrite)) {
+                                $stateMatch = $false
+                                break
+                            }
+                        }
+                        if ($stateMatch) {
+                            $msysCacheIsValid = $true
+                        }
+                    }
+                }
+            }
+        } catch {
+            $msysCacheIsValid = $false
+        }
+    }
+
+    if ($msysCacheIsValid) {
+        return
+    }
+
+    # If cache not valid, perform verification calling pacman -Q only once
+    $pacmanOutput = & $pacman -Q 2>$null
+    if ($LASTEXITCODE -ne 0 -or -not $pacmanOutput) {
+        throw "Failed to query installed MSYS2 packages using pacman."
+    }
+
+    $installedLookup = @{}
+    foreach ($line in $pacmanOutput) {
+        $trimmed = $line.Trim()
+        if (-not $trimmed) { continue }
+        $parts = $trimmed -split '\s+'
+        if ($parts.Count -ge 2) {
+            $installedLookup[$parts[0]] = $parts[1]
+        }
+    }
+
     $mismatches = @()
     foreach ($line in Get-Content -LiteralPath $lockPath) {
         $entry = $line.Trim()
@@ -162,19 +402,36 @@ function Assert-Msys2PackageLock([string]$Msys2Root) {
         $parts = $entry -split '\s+'
         if ($parts.Count -ne 2) { throw "Invalid entry in ${lockPath}: $entry" }
 
-        $installed = & $pacman -Q $parts[0] 2>$null
-        if ($LASTEXITCODE -ne 0 -or -not $installed) {
-            $mismatches += "$($parts[0]): required $($parts[1]), not installed"
-            continue
-        }
-        $installedVersion = ($installed -split '\s+')[-1]
-        if ($installedVersion -ne $parts[1]) {
-            $mismatches += "$($parts[0]): required $($parts[1]), found $installedVersion"
+        $packageName = $parts[0]
+        $requiredVersion = $parts[1]
+
+        if (-not $installedLookup.ContainsKey($packageName)) {
+            $mismatches += "${packageName}: required $requiredVersion, not installed"
+        } else {
+            $installedVersion = $installedLookup[$packageName]
+            if ($installedVersion -ne $requiredVersion) {
+                $mismatches += "${packageName}: required $requiredVersion, found $installedVersion"
+            }
         }
     }
 
     if ($mismatches.Count -gt 0) {
         throw "MSYS2 dependency versions do not match windows-msys2.lock:`n  $($mismatches -join "`n  ")`nSee WINDOWS.md for the exact installation command."
+    }
+
+    # Successful validation, write cache
+    try {
+        if (-not (Test-Path -LiteralPath $buildDir -PathType Container)) {
+            New-Item -ItemType Directory -Force -Path $buildDir | Out-Null
+        }
+        $tempMsysCachePath = "$msysCachePath.tmp"
+        $currentMsysKey | ConvertTo-Json -Depth 20 | Set-Content -LiteralPath $tempMsysCachePath -Encoding UTF8
+        if (Test-Path -LiteralPath $msysCachePath) {
+            Remove-Item -LiteralPath $msysCachePath -Force -ErrorAction SilentlyContinue
+        }
+        Move-Item -LiteralPath $tempMsysCachePath -Destination $msysCachePath -Force
+    } catch {
+        # Silently ignore cache write failures
     }
 }
 
