@@ -42,6 +42,12 @@ $activeProject = Join-Path $repoRoot 'src\Projects\.active_project.cpp'
 $sampleRate = 48000
 $result = 0
 $outputDir = $null
+$pathAfterVcImport = $null
+$completedSuccessfully = $false
+$ioIn = $null
+$ioOut = $null
+$temporaryProjectCopied = $false
+$originalLocation = Get-Location
 
 function Find-VcVars64 {
     $candidates = @(
@@ -122,6 +128,60 @@ function Write-JsonCache([string]$Path, $Value) {
     }
 }
 
+function Test-CurrentVcEnvironment([string]$VcRoot) {
+    foreach ($name in @('VSCMD_VER', 'VSCMD_ARG_HOST_ARCH', 'VSCMD_ARG_TGT_ARCH', 'VCToolsInstallDir', 'WindowsSdkDir', 'INCLUDE', 'LIB')) {
+        if ([string]::IsNullOrWhiteSpace([Environment]::GetEnvironmentVariable($name, 'Process'))) {
+            return $false
+        }
+    }
+    if ($env:VSCMD_ARG_HOST_ARCH -ne 'x64' -or $env:VSCMD_ARG_TGT_ARCH -ne 'x64') {
+        return $false
+    }
+
+    $compiler = Get-Command cl.exe -ErrorAction SilentlyContinue
+    if (-not $compiler -or -not $compiler.Source) { return $false }
+    try {
+        $canonicalVcRoot = (Get-Item -LiteralPath $VcRoot).FullName.TrimEnd('\') + '\'
+        $canonicalCompiler = (Get-Item -LiteralPath $compiler.Source).FullName
+        return $canonicalCompiler.StartsWith($canonicalVcRoot, [StringComparison]::OrdinalIgnoreCase) -and
+            (Test-Path -LiteralPath $env:VCToolsInstallDir -PathType Container) -and
+            (Test-Path -LiteralPath $env:WindowsSdkDir -PathType Container)
+    } catch {
+        return $false
+    }
+}
+
+function Prepend-PathEntry([string]$Path) {
+    $remaining = @($env:PATH -split ';') | Where-Object {
+        $_ -and -not [string]::Equals($_, $Path, [StringComparison]::OrdinalIgnoreCase)
+    }
+    $env:PATH = (@($Path) + $remaining) -join ';'
+}
+
+function Get-ProcessEnvironmentSnapshot {
+    $snapshot = @{}
+    foreach ($entry in [Environment]::GetEnvironmentVariables('Process').GetEnumerator()) {
+        $snapshot[$entry.Key] = $entry.Value
+    }
+    return $snapshot
+}
+
+function Restore-ProcessEnvironment($Snapshot) {
+    foreach ($name in @([Environment]::GetEnvironmentVariables('Process').Keys)) {
+        if (-not $Snapshot.ContainsKey($name)) {
+            [Environment]::SetEnvironmentVariable($name, $null, 'Process')
+        }
+    }
+    foreach ($entry in $Snapshot.GetEnumerator()) {
+        [Environment]::SetEnvironmentVariable($entry.Key, $entry.Value, 'Process')
+    }
+}
+
+function Restore-EnvironmentVariable($Snapshot, [string]$Name) {
+    $value = if ($Snapshot.ContainsKey($Name)) { $Snapshot[$Name] } else { $null }
+    [Environment]::SetEnvironmentVariable($Name, $value, 'Process')
+}
+
 function Import-VcVars64([string]$VcVarsPath) {
     # Run vcvars64.bat in a child with a deliberately small environment. A
     # developer shell can retain enough stale VS variables to exceed cmd.exe's
@@ -130,6 +190,8 @@ function Import-VcVars64([string]$VcVarsPath) {
 
     $canonicalVcVars = (Get-Item -LiteralPath $VcVarsPath).FullName
     $vcRoot = Split-Path (Split-Path (Split-Path $canonicalVcVars -Parent) -Parent) -Parent
+    if (Test-CurrentVcEnvironment $vcRoot) { return }
+
     $toolchainRoots = @(
         (Join-Path $vcRoot 'Tools\MSVC'),
         "${env:ProgramFiles(x86)}\Windows Kits\10\Include",
@@ -157,7 +219,7 @@ function Import-VcVars64([string]$VcVarsPath) {
         $vcPath = $cachedData.Environment.PATH
         $callerPath = @($originalPath -split ';') |
             Where-Object { $_ -and $_ -notmatch '(?i)\\Microsoft Visual Studio\\|\\Windows Kits\\' }
-        $mergedPath = @(($vcPath -split ';') + $callerPath) |
+        $mergedPath = @($callerPath + ($vcPath -split ';')) |
             Where-Object { $_ } |
             Select-Object -Unique
         $env:PATH = $mergedPath -join ';'
@@ -231,7 +293,7 @@ function Import-VcVars64([string]$VcVarsPath) {
 
     $callerPath = @($originalPath -split ';') |
         Where-Object { $_ -and $_ -notmatch '(?i)\\Microsoft Visual Studio\\|\\Windows Kits\\' }
-    $mergedPath = @(($vcPath -split ';') + $callerPath) |
+    $mergedPath = @($callerPath + ($vcPath -split ';')) |
         Where-Object { $_ } |
         Select-Object -Unique
     $env:PATH = $mergedPath -join ';'
@@ -373,36 +435,37 @@ function Invoke-Native([scriptblock]$Command, [int]$FailureCode, [string]$Descri
     }
 }
 
-if (($VideoWidth % 2) -ne 0 -or ($VideoHeight % 2) -ne 0) {
-    throw 'Video width and height must be even for 4:2:0 encoding.'
-}
-if ($SmoketestOnly -and $SkipSmoketest) {
-    throw '-SmoketestOnly (-s) and -SkipSmoketest (-n) cannot be used together.'
-}
-if ($Quiet) {
-    $env:SWAPTUBE_QUIET = '1'
-} else {
-    Remove-Item Env:SWAPTUBE_QUIET -ErrorAction SilentlyContinue
-}
-
-Set-Location $repoRoot
-$projectMatches = @(Get-ChildItem -LiteralPath (Join-Path $repoRoot 'src\Projects') -Recurse -File -Filter "$ProjectName.cpp")
-if ($projectMatches.Count -eq 0) { throw "Project '$ProjectName' does not exist." }
-if ($projectMatches.Count -gt 1) { throw "Project '$ProjectName' is ambiguous; multiple matching source files exist." }
-
-$timestamp = Get-Date -Format 'yyyy-MM-dd_HH.mm.ss'
-$outputDir = Join-Path $repoRoot "out\$ProjectName\$timestamp"
-$inputDir = Join-Path $repoRoot "media\$ProjectName"
-$ioIn = Join-Path $buildDir 'io_in'
-$ioOut = Join-Path $buildDir 'io_out'
-$temporaryProjectCopied = $false
-
-New-Item -ItemType Directory -Force -Path (Join-Path $outputDir 'frames'), (Join-Path $inputDir 'latex'), $buildDir | Out-Null
-Copy-Item -LiteralPath $projectMatches[0].FullName -Destination $activeProject -Force
-[System.IO.File]::SetLastWriteTimeUtc($activeProject, [DateTime]::UtcNow)
-$temporaryProjectCopied = $true
-
+$originalEnvironment = Get-ProcessEnvironmentSnapshot
 try {
+    if (($VideoWidth % 2) -ne 0 -or ($VideoHeight % 2) -ne 0) {
+        throw 'Video width and height must be even for 4:2:0 encoding.'
+    }
+    if ($SmoketestOnly -and $SkipSmoketest) {
+        throw '-SmoketestOnly (-s) and -SkipSmoketest (-n) cannot be used together.'
+    }
+    if ($Quiet) {
+        $env:SWAPTUBE_QUIET = '1'
+    } else {
+        Remove-Item Env:SWAPTUBE_QUIET -ErrorAction SilentlyContinue
+    }
+
+    Set-Location $repoRoot
+    $projectMatches = @(Get-ChildItem -LiteralPath (Join-Path $repoRoot 'src\Projects') -Recurse -File -Filter "$ProjectName.cpp")
+    if ($projectMatches.Count -eq 0) { throw "Project '$ProjectName' does not exist." }
+    if ($projectMatches.Count -gt 1) { throw "Project '$ProjectName' is ambiguous; multiple matching source files exist." }
+
+    $timestamp = Get-Date -Format 'yyyy-MM-dd_HH.mm.ss'
+    $outputDir = Join-Path $repoRoot "out\$ProjectName\$timestamp"
+    $inputDir = Join-Path $repoRoot "media\$ProjectName"
+    $ioIn = Join-Path $buildDir 'io_in'
+    $ioOut = Join-Path $buildDir 'io_out'
+    $temporaryProjectCopied = $false
+
+    New-Item -ItemType Directory -Force -Path (Join-Path $outputDir 'frames'), (Join-Path $inputDir 'latex'), $buildDir | Out-Null
+    Copy-Item -LiteralPath $projectMatches[0].FullName -Destination $activeProject -Force
+    [System.IO.File]::SetLastWriteTimeUtc($activeProject, [DateTime]::UtcNow)
+    $temporaryProjectCopied = $true
+
     $null = Find-MicroTex
     $cmakeCommand = Get-Command cmake -ErrorAction SilentlyContinue
     $ninjaCommand = Get-Command ninja -ErrorAction SilentlyContinue
@@ -415,6 +478,7 @@ try {
 
     $vcVars = Find-VcVars64
     Import-VcVars64 $vcVars
+    $pathAfterVcImport = $env:PATH
 
     $cxxCompiler = (Get-Command cl.exe -ErrorAction Stop).Source
     $cmakeArgs = @('-G', 'Ninja', '..', '-DCMAKE_BUILD_TYPE=Release', "-DCMAKE_CXX_COMPILER=$cxxCompiler", "-DCMAKE_MAKE_PROGRAM=$ninjaExecutable", "-DCOMPUTE_LANG=$ComputeLang")
@@ -422,12 +486,12 @@ try {
     if ($msys2Root) {
         Assert-Msys2PackageLock $msys2Root
         $cmakeArgs += "-DMSYS2_ROOT=$msys2Root"
-        $env:PATH = "$(Join-Path $msys2Root 'mingw64\bin');$env:PATH"
+        Prepend-PathEntry (Join-Path $msys2Root 'mingw64\bin')
     }
     $ffmpegRoot = Find-FfmpegRoot
     if ($ffmpegRoot) {
         $cmakeArgs += "-DFFMPEG_ROOT=$ffmpegRoot"
-        $env:PATH = "$(Join-Path $ffmpegRoot 'bin');$env:PATH"
+        Prepend-PathEntry (Join-Path $ffmpegRoot 'bin')
     }
 
     $configurationFiles = @()
@@ -487,6 +551,7 @@ try {
     } finally {
         Pop-Location
     }
+    $completedSuccessfully = $true
 } catch [System.ComponentModel.Win32Exception] {
     $result = $_.Exception.NativeErrorCode
     [Console]::Error.WriteLine("go.ps1: $($_.Exception.Message)")
@@ -494,10 +559,19 @@ try {
     $result = 1
     [Console]::Error.WriteLine("go.ps1: $($_.Exception.Message)")
 } finally {
+    if (-not $completedSuccessfully) {
+        Restore-ProcessEnvironment $originalEnvironment
+    } else {
+        if ($pathAfterVcImport) { $env:PATH = $pathAfterVcImport }
+        Restore-EnvironmentVariable $originalEnvironment 'SWAPTUBE_QUIET'
+    }
+    Set-Location $originalLocation
     if ($outputDir -and (Test-Path -LiteralPath $ioOut -PathType Container)) {
         Copy-Item -Path (Join-Path $ioOut '*') -Destination $outputDir -Recurse -Force -ErrorAction SilentlyContinue
     }
-    Remove-Item -LiteralPath $ioIn, $ioOut -Recurse -Force -ErrorAction SilentlyContinue
+    if ($ioIn -or $ioOut) {
+        Remove-Item -LiteralPath @($ioIn, $ioOut) -Recurse -Force -ErrorAction SilentlyContinue
+    }
     if ($temporaryProjectCopied -and (Test-Path -LiteralPath $activeProject -PathType Leaf)) {
         Move-Item -LiteralPath $activeProject -Destination $outputDir -Force
     }
