@@ -236,8 +236,9 @@ Set-Location .\swaptube
 Set-ExecutionPolicy -Scope Process Bypass
 ```
 
-First run a small smoketest. It compiles the whole program but renders only one
-frame per microblock:
+First run a small smoketest. After compiling, SwapTube performs a fast
+count-only planning pass and then renders one test frame per discovered
+microblock:
 
 ```powershell
 .\go.ps1 MandelbrotDemo 640 360 30 -s -c CUDA
@@ -256,8 +257,8 @@ video.
 
 Useful switches:
 
-- `-s`: smoketest only
-- `-n`: skip the smoketest and perform the full render immediately
+- `-s`: run planning and the smoketest, but skip the full render
+- `-n`: skip the smoketest and perform planning followed by the full render
 - `-q`: suppress noninteractive CMake, Ninja, and SwapTube console output, and
   disable periodic terminal frame previews; interactive `UIDemo` output remains
   visible

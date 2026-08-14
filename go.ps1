@@ -46,6 +46,7 @@ $pathAfterVcImport = $null
 $completedSuccessfully = $false
 $ioIn = $null
 $ioOut = $null
+$microblockPlanPath = $null
 $temporaryProjectCopied = $false
 $originalLocation = Get-Location
 
@@ -540,13 +541,17 @@ try {
 
         $audioHintsValue = [int]$AudioHints.IsPresent
         $audioSfxValue = [int]$AudioSfx.IsPresent
+        # Keep this plan private to this invocation, but use it for every mode
+        # so smoke and render validate the same macroblock schedule.
+        $microblockPlanPath = Join-Path $buildDir ("swaptube-microblock-plan-{0}" -f [Guid]::NewGuid().ToString('N'))
+        Invoke-Native { & .\swaptube.exe 1 1 $Framerate $sampleRate plan $audioHintsValue $audioSfxValue $microblockPlanPath } 2 'Microblock planning'
         if (-not $SkipSmoketest) {
-            Invoke-Native { & .\swaptube.exe 160 90 $Framerate $sampleRate smoketest $audioHintsValue $audioSfxValue } 2 'Smoketest'
+            Invoke-Native { & .\swaptube.exe 160 90 $Framerate $sampleRate smoketest $audioHintsValue $audioSfxValue $microblockPlanPath } 2 'Smoketest'
         }
         if (-not $SmoketestOnly) {
             Remove-Item -Path (Join-Path $ioOut '*') -Recurse -Force -ErrorAction SilentlyContinue
             New-Item -ItemType Directory -Force -Path (Join-Path $ioOut 'frames') | Out-Null
-            Invoke-Native { & .\swaptube.exe $VideoWidth $VideoHeight $Framerate $sampleRate render $audioHintsValue $audioSfxValue } 2 'Render' -Interactive:($ProjectName -eq 'UIDemo')
+            Invoke-Native { & .\swaptube.exe $VideoWidth $VideoHeight $Framerate $sampleRate render $audioHintsValue $audioSfxValue $microblockPlanPath } 2 'Render' -Interactive:($ProjectName -eq 'UIDemo')
         }
     } finally {
         Pop-Location
@@ -571,6 +576,9 @@ try {
     }
     if ($ioIn -or $ioOut) {
         Remove-Item -LiteralPath @($ioIn, $ioOut) -Recurse -Force -ErrorAction SilentlyContinue
+    }
+    if ($microblockPlanPath) {
+        Remove-Item -LiteralPath $microblockPlanPath -Force -ErrorAction SilentlyContinue
     }
     if ($temporaryProjectCopied -and (Test-Path -LiteralPath $activeProject -PathType Leaf)) {
         Move-Item -LiteralPath $activeProject -Destination $outputDir -Force
