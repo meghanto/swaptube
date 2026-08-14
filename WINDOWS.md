@@ -29,7 +29,15 @@ components selected:
 - a Windows 10 or Windows 11 SDK
 - C++ CMake tools for Windows
 
-`go.ps1` locates `vcvars64.bat` and imports the x64 MSVC environment itself.
+`go.ps1` discovers Visual Studio/MSVC in the standard installation locations or
+through `vswhere.exe`. It runs `vcvars64.bat` in an isolated child process to
+avoid `cmd.exe`'s input-length limit, then caches the validated result in
+`build\vcvars-cache.json`.
+
+After a successful run, the validated MSVC environment remains available in
+the current PowerShell process for faster consecutive builds. If initialization
+or any later step fails, `go.ps1` restores the process environment and working
+directory to their exact pre-run values.
 
 ## 2. Install the NVIDIA driver and CUDA Toolkit
 
@@ -51,11 +59,39 @@ nvidia-smi
 nvcc --version
 ```
 
+### Adaptive CUDA architecture selection
+
+By default, `go.ps1` and `CMakeLists.txt` use adaptive CUDA architecture
+selection: `CMAKE_CUDA_ARCHITECTURES` is set to `native`, which automatically
+queries the host machine's active NVIDIA GPU during configuration and targets
+its specific compute capability.
+
+If you need to cross-compile or override this automatic detection (for instance,
+to target a different GPU architecture or to bypass native query issues), create
+a `local.cmake` file in the SwapTube root folder and specify the target
+capability:
+
+```cmake
+set(CMAKE_CUDA_ARCHITECTURES 75 CACHE STRING "CUDA compute capability" FORCE)
+```
+
+Then rerun `go.ps1`. Delete or comment out this entry in `local.cmake` to
+return to automatic, adaptive GPU architecture selection.
+
 ## 3. Install Git, CMake, Ninja, and shared FFmpeg
 
-Install Git, CMake 3.24 or newer, Ninja, and a shared FFmpeg build. Both
-[Chocolatey](https://chocolatey.org/install) and [Scoop](https://scoop.sh/)
-work. With Chocolatey, run in an Administrator PowerShell window:
+SwapTube requires Git, CMake 3.24 or newer, and Ninja to be installed by the
+caller and available in `PATH`. The build script uses those CMake and Ninja
+executables and stops if either is missing.
+
+A shared FFmpeg build is required, including headers, import libraries such as
+`avcodec.lib`, and runtime DLLs. `go.ps1` searches the standard Chocolatey and
+Scoop layouts for `ffmpeg-shared`. For another layout, set the `FFMPEG_ROOT`
+CMake cache variable in `local.cmake`.
+
+Both [Chocolatey](https://chocolatey.org/install) and
+[Scoop](https://scoop.sh/) can install these packages. With Chocolatey, run in
+an Administrator PowerShell window:
 
 ```powershell
 choco install git cmake ninja ffmpeg-shared -y
@@ -67,11 +103,7 @@ With Scoop, run in a normal PowerShell window:
 scoop install git cmake ninja ffmpeg-shared
 ```
 
-Use `ffmpeg-shared`, not the executable-only `ffmpeg` package. SwapTube needs
-the FFmpeg headers, import libraries, and runtime DLLs. `go.ps1` detects the
-standard Chocolatey and Scoop installation locations automatically.
-
-Close and reopen PowerShell, then verify:
+Close and reopen PowerShell, then verify the caller-installed tools:
 
 ```powershell
 git --version
@@ -116,8 +148,24 @@ pacman -S --needed \
 SwapTube records the graphics/runtime versions validated by the native Windows
 build in `windows-msys2.lock`. Because MSYS2 is a rolling distribution,
 `go.ps1` checks the installed packages against that file and stops on a version
-mismatch. To install the exact locked packages from MSYS2's official archive,
-run this from **MSYS2 MSYS** in the SwapTube directory:
+mismatch.
+
+The lock does not limit CPU speed or NVIDIA GPU capability. Its packages are
+x86-64 DLLs, so newer x86-64 Windows CPUs do not require different MSYS2
+packages, while CUDA architecture selection is handled separately through
+`CMAKE_CUDA_ARCHITECTURES=native`.
+The practical limitation is software availability: fresh MSYS2 installations
+may need the historical package archive to obtain the exact versions. MSYS2 has
+also deprecated the MINGW64 environment used by this workflow, so these pins
+are a reproducible compatibility lane, not a permanent substitute for testing
+newer UCRT64 packages.
+
+Native Windows ARM64 is not supported by this workflow. It currently uses
+`vcvars64.bat`, the `mingw64` prefix, and `mingw-w64-x86_64-*` packages. MSYS2's
+preliminary CLANGARM64 environment would require a separate port and lock file.
+
+To install the exact locked packages from MSYS2's official archive, run this
+from **MSYS2 MSYS** in the SwapTube directory:
 
 ```bash
 mapfile -t locked_packages < <(
@@ -210,7 +258,9 @@ Useful switches:
 
 - `-s`: smoketest only
 - `-n`: skip the smoketest and perform the full render immediately
-- `-q`: suppress compiler output and the periodic terminal frame preview
+- `-q`: suppress noninteractive CMake, Ninja, and SwapTube console output, and
+  disable periodic terminal frame previews; interactive `UIDemo` output remains
+  visible
 - `-h`: enable audio hints
 - `-x`: enable sound effects
 - `-c CUDA`: select the NVIDIA CUDA backend
@@ -264,20 +314,17 @@ The checkout must be named `MicroTeX-master` and must be beside SwapTube, not
 inside it. Rebuild it and confirm that `LaTeX.exe` is in one of the two paths
 listed above.
 
-### CUDA architecture errors
-
-The default Windows target is compute capability 5.0 with CUDA 12 and 6.0 with
-CUDA 13. If the default does not match the installed GPU, create `local.cmake`
-in the SwapTube root with a numeric architecture such as `75` or `86`:
-
-```cmake
-set(SWAPTUBE_CUDA_ARCH 75 CACHE STRING "CUDA compute capability" FORCE)
-```
-
-Then rerun `go.ps1`. Remove `local.cmake` to return to automatic selection.
-
 ### Playback hangs or reports a WASAPI endpoint error
 
 This commonly occurs when `ffplay` runs in a remote or noninteractive session.
 Use `play.ps1`, VLC, mpv, or open the generated video directly. Rendering does
 not require an active audio playback endpoint.
+
+### Windows runtime stderr suppression and diagnostics
+
+Like upstream `go.sh`, `go.ps1` redirects only the SwapTube executable's runtime
+stderr to `$null` during smoketests and renders. This hides FFmpeg's verbose
+Matroska diagnostics. CMake and Ninja diagnostics remain visible unless `-q` is
+used. Runtime failures still return a nonzero exit code and produce the
+wrapper's concise failure message, but their detailed stderr is intentionally
+hidden for upstream parity.
