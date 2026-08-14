@@ -149,8 +149,8 @@ zoom","0"}, {"scale_x","1"}, {"scale_y","1"}, {"scale_z","1"}, {"brightness_offs
 */
 
     BezierStateCurve bsc(waypoints);
-    stage_macroblock(SilenceBlock(waypoints.size()), waypoints.size()-1);
-    while(remaining_microblocks_in_macroblock) {
+    stage_macroblock(SilenceBlock(waypoints.size()));
+    while (bsc.size() > 0) {
         bs.manager.set(bsc.pop_next_state_set());
         bs.render_microblock();
     }

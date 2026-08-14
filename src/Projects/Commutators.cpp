@@ -14,13 +14,13 @@ void test_latex(){
     string latex_formula = "\\frac{7!\\times 3^6\\times 24!^{\\frac{n^2-2n-3\\times (n\\, mod\\, 2)}{4}}\\times (24\\times 12!\\times 2^{10})^{n\\, mod \\, 2}}{4!^{6\\times\\frac{(n-2)^2-n\\, mod\\, 2}{4}}}";
     string latex_oui = "OUI";
     LatexScene ls(latex_formula, 1);
-    stage_macroblock(SilenceBlock(1), 1);
+    stage_macroblock(SilenceBlock(1));
     ls.render_microblock();
 }
 
 void cube_corner_in_center(){
     RubiksScene rs;
-    stage_macroblock(SilenceBlock(1), 1);
+    stage_macroblock(SilenceBlock(1));
 
     quat yaw_quat = quat(cos(0.125 * M_PI), 0, sin(0.125 * M_PI), 0);
     quat pitch_quat = quat(cos(-0.098 * M_PI), sin(-0.098 * M_PI), 0, 0);
@@ -42,7 +42,7 @@ void cube_corner_in_center(){
     // open_ui(rs);
 
 
-    // stage_macroblock(SilenceBlock(5), 3);
+    // stage_macroblock(SilenceBlock(5));
     
     // rs.exec_move_from_slice("R");
     // rs.render_microblock();
@@ -83,13 +83,13 @@ void cube_corner_in_center(){
 
 
 
-    stage_macroblock(SilenceBlock(10), 1);
+    stage_macroblock(SilenceBlock(10));
     rs.render_microblock();
 }
 
 void test_voice(){
     RubiksScene rs;
-    stage_macroblock(FileBlock("nothing"), 1);
+    stage_macroblock(FileBlock("nothing"));
     rs.render_microblock();
 }
 
@@ -98,7 +98,7 @@ void intro(CompositeScene& cs){
     shared_ptr<RubiksScene> rs = make_shared<RubiksScene>();
     cs.add_scene(rs, "rs");
 
-    stage_macroblock(SilenceBlock(2), 1);
+    stage_macroblock(SilenceBlock(2));
     rs->manager.transition(MACRO, {
         {"q1", "0.5"},
         {"qi", "{t} sin"},
@@ -109,10 +109,10 @@ void intro(CompositeScene& cs){
     cs.render_microblock();
 
     
-    stage_macroblock(FileBlock("nothing"), 1);
+    stage_macroblock(FileBlock("nothing"));
     cs.render_microblock();
 
-    stage_macroblock(FileBlock("nothing again test"), 1);
+    stage_macroblock(FileBlock("nothing again test"));
     cs.render_microblock();
 
 
@@ -131,19 +131,19 @@ void graph_one(){
         {"cube_size", "3"},
     });
 
-    stage_macroblock(FileBlock("Now let's do the same with a 3x3 !"), 1);
+    stage_macroblock(FileBlock("Now let's do the same with a 3x3 !"));
     rgs.add_cube("", true);
     rgs.render_microblock();
 
-    stage_macroblock(FileBlock("let's make a random turn, we are now on one of those twelve nodes"), 1);
+    stage_macroblock(FileBlock("let's make a random turn, we are now on one of those twelve nodes"));
     rgs.add_children({"R", "U", "F", "R'", "U'", "F'", "L", "D", "B", "L'", "D'", "B'"}, true);
     rgs.render_microblock();
 
-    stage_macroblock(FileBlock("now a second turn"), 1);
+    stage_macroblock(FileBlock("now a second turn"));
     rgs.add_children({"R", "U", "F", "R'", "U'", "F'", "L", "D", "B", "L'", "D'", "B'"}, true);
     rgs.render_microblock();
 
-    stage_macroblock(FileBlock("and a third"), 1);
+    stage_macroblock(FileBlock("and a third"));
     rgs.add_children({"R", "U", "F", "R'", "U'", "F'", "L", "D", "B", "L'", "D'", "B'"}, true);
     rgs.render_microblock();
     
@@ -151,7 +151,7 @@ void graph_one(){
 
 void test_rope(){
     RopeScene rs("io_in/loop_example_0", vec2(1, 1));
-    stage_macroblock(SilenceBlock(10), 1);
+    stage_macroblock(SilenceBlock(10));
     
     rs.render_microblock();
 }

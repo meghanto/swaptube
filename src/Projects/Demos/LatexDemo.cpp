@@ -8,13 +8,13 @@ void render_video(){
     //vector<string> latex_strings = {"aaa", "a^aa", "a^{aa}", "a^{a^a}", "a^{a^{a^a}}", "a^{a^{a^{a^a}}}", "a^{a^{a^{a^{a^a}}}}", "a^{a^{a^{a^{a^{a^a}}}}}", "a^{a^{a^{a^{a^{a^{a^a}}}}}}", "x = \\frac{-b \\pm \\sqrt{b^2 - 4ac}}{2a}"};
 
     LatexScene latex(latex_strings[0]);
-    stage_macroblock(SilenceBlock(1), 1);
+    stage_macroblock(SilenceBlock(1));
     latex.render_microblock();
 
     for (int i = 1; i < latex_strings.size(); i++){
         const string& latex_str = latex_strings[i];
         latex.begin_latex_transition(MICRO, latex_str);
-        stage_macroblock(SilenceBlock(1), 2);
+        stage_macroblock(SilenceBlock(1));
         latex.render_microblock();
         latex.render_microblock();
     }

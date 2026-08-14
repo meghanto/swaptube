@@ -18,7 +18,7 @@ void render_video() {
         {"seed_c_r","2"}
     });
     BezierStateCurve bsc(waypoints);
-    stage_macroblock(SilenceBlock(5), 2);
+    stage_macroblock(SilenceBlock(5));
     StateSet ss1 = bsc.pop_next_state_set();
     for(const auto& p: ss1) {
         cout << p.first << ": " << p.second << endl;

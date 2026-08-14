@@ -27,7 +27,7 @@ void first_half() {
         {"pov_q1", "-.5"},
         {"pov_qj", "1"},
     });
-    stage_macroblock(SilenceBlock(2), 2);
+    stage_macroblock(SilenceBlock(2));
     gs->manager.transition(MICRO, {
         {"amp", ".25"}
     });
@@ -43,20 +43,20 @@ void first_half() {
         {"scrunch_z", "10"},
     });
 
-    stage_macroblock(SilenceBlock(1), 1);
+    stage_macroblock(SilenceBlock(1));
     gs->manager.transition(MICRO, {
         {"amp", ".05"}
     });
     gs->render_microblock();
 
-    stage_macroblock(FileBlock("Woooahhh!"), 2);
+    stage_macroblock(FileBlock("Woooahhh!"));
     gs->render_microblock();
     gs->manager.transition(MICRO, {
         {"pov_x", "1"},
     });
     gs->render_microblock();
 
-    stage_macroblock(FileBlock("*knock knock knock* Interdimensional FBI! Open up!"), 1);
+    stage_macroblock(FileBlock("*knock knock knock* Interdimensional FBI! Open up!"));
     gs->render_microblock();
 
     // Turn towards door
@@ -65,10 +65,10 @@ void first_half() {
         {"pov_q1", "1"},
     });
 
-    stage_macroblock(FileBlock("(softly) Oh crap."), 1);
+    stage_macroblock(FileBlock("(softly) Oh crap."));
     gs->render_microblock();
 
-    stage_macroblock(FileBlock("Open up now!"), 1);
+    stage_macroblock(FileBlock("Open up now!"));
     gs->manager.transition(MICRO, {
         {"pov_x", "0"},
         {"pov_z", "2"},
@@ -85,16 +85,16 @@ void first_half() {
     cs_killswitch.render_microblock();
     cs_killswitch.remove_all_subscenes();
 
-    stage_macroblock(FileBlock("(Door bursts open) Put your hands where I can see them!"), 2);
+    stage_macroblock(FileBlock("(Door bursts open) Put your hands where I can see them!"));
     gs->manager.set("sphere_radius", ".1 {voice} * .5 +");
     gs->manager.transition(MICRO, "sphere_z", "3");
     gs->render_microblock();
     gs->render_microblock();
 
-    stage_macroblock(FileBlock("Do you live here?"), 1);
+    stage_macroblock(FileBlock("Do you live here?"));
     gs->render_microblock();
 
-    stage_macroblock(FileBlock("Y-yes!"), 4);
+    stage_macroblock(FileBlock("Y-yes!"));
     // Nod head
     gs->manager.transition(MICRO, {
         {"pov_qi", "{t} 15 * sin .05 *"},
@@ -107,7 +107,7 @@ void first_half() {
     gs->render_microblock();
     gs->render_microblock();
 
-    stage_macroblock(FileBlock("Our instruments show a large non-zero gaussian curvature in this room. What on earth are you doing in here?"), 1);
+    stage_macroblock(FileBlock("Our instruments show a large non-zero gaussian curvature in this room. What on earth are you doing in here?"));
     gs->render_microblock();
 
     CompositeScene cs_handsup;
@@ -115,14 +115,14 @@ void first_half() {
     shared_ptr<AlphaFilterScene> alpha_handsup = make_shared<AlphaFilterScene>(handsup, 0xff00ff00, true);
     cs_handsup.add_scene(gs, "gs");
     cs_handsup.add_scene(alpha_handsup, "alpha");
-    stage_macroblock(FileBlock("It wasn't me, I swear!"), 1);
+    stage_macroblock(FileBlock("It wasn't me, I swear!"));
     cs_handsup.render_microblock();
     cs_handsup.remove_all_subscenes();
 
-    stage_macroblock(FileBlock("Are you in possession of any contraband items?"), 1);
+    stage_macroblock(FileBlock("Are you in possession of any contraband items?"));
     gs->render_microblock();
 
-    stage_macroblock(FileBlock("What, like, drugs?"), 1);
+    stage_macroblock(FileBlock("What, like, drugs?"));
     gs->render_microblock();
 
     CompositeScene cs;
@@ -255,7 +255,7 @@ void first_half() {
         {"manifold_b_steps", "100"},
     };
 
-    stage_macroblock(FileBlock("No! Tesseracts, Möbius strips, or perhaps... a Klein bottle?"), 13);
+    stage_macroblock(FileBlock("No! Tesseracts, Möbius strips, or perhaps... a Klein bottle?"));
     ms->manager.set(plane1);
     cs.render_microblock();
     ms->manager.transition(MICRO, tesseract);
@@ -283,7 +283,7 @@ void first_half() {
     shared_ptr<AlphaFilterScene> alpha_pointdoor = make_shared<AlphaFilterScene>(pointdoor, 0xff00ff00, true);
     cs_pointdoor.add_scene(gs, "gs");
     cs_pointdoor.add_scene(alpha_pointdoor, "alpha");
-    stage_macroblock(FileBlock("Oh, I think I saw my roommate playing with those before... (points at door)"), 1);
+    stage_macroblock(FileBlock("Oh, I think I saw my roommate playing with those before... (points at door)"));
     gs->manager.transition(MICRO, {
         {"pov_q1", "1"},
         {"pov_qj", "-1"},
@@ -291,7 +291,7 @@ void first_half() {
     cs_pointdoor.render_microblock();
     cs_pointdoor.remove_all_subscenes();
 
-    stage_macroblock(FileBlock("Thanks, I'll take it from here."), 1);
+    stage_macroblock(FileBlock("Thanks, I'll take it from here."));
     gs->manager.transition(MICRO, {
         {"sphere_x", "-3"},
         {"sphere_z", "0"},
@@ -299,7 +299,7 @@ void first_half() {
     gs->render_microblock();
     set_for_real(true);
 
-    stage_macroblock(SilenceBlock(1), 1);
+    stage_macroblock(SilenceBlock(1));
     gs->manager.transition(MICRO, {
         {"pov_q1", "1"},
         {"pov_qj", "0"},
@@ -315,14 +315,14 @@ void first_half() {
     });
     gs->render_microblock();
 
-    stage_macroblock(SilenceBlock(1), 1);
+    stage_macroblock(SilenceBlock(1));
     gs->render_microblock();
 
     gs->manager.set({
         {"sphere_radius", "0"},
     });
 
-    stage_macroblock(FileBlock("[Agent begins to yell]"), 1);
+    stage_macroblock(FileBlock("[Agent begins to yell]"));
     gs->render_microblock();
 
     gs->manager.transition(MICRO, {
@@ -332,10 +332,10 @@ void first_half() {
         {"space_w", "0"},
     });
 
-    stage_macroblock(FileBlock("How in the heck did they figure out..."), 1);
+    stage_macroblock(FileBlock("How in the heck did they figure out..."));
     gs->render_microblock();
 
-    stage_macroblock(FileBlock("Hello?"), 1);
+    stage_macroblock(FileBlock("Hello?"));
     gs->render_microblock();
 
     // Paraboloid
@@ -346,7 +346,7 @@ void first_half() {
         {"space_w", "(a) ^2 (b) ^2 (c) ^2 + +"},
     });
 
-    stage_macroblock(FileBlock("Dude, you told me this thing was legal!"), 1);
+    stage_macroblock(FileBlock("Dude, you told me this thing was legal!"));
     gs->render_microblock();
 
     // Hyperbolic paraboloid
@@ -357,7 +357,7 @@ void first_half() {
         {"space_w", "(a) ^2 (b) ^2 (c) ^2 + -"},
     });
 
-    stage_macroblock(FileBlock("In the USA, there's no legislation regarding manipulating the fabric of space."), 1);
+    stage_macroblock(FileBlock("In the USA, there's no legislation regarding manipulating the fabric of space."));
     gs->render_microblock();
 
     // Ring
@@ -374,13 +374,13 @@ void first_half() {
         {"ring_intensity", "-5"},
     });
 
-    stage_macroblock(FileBlock("Then why is the Interdimensional FBI after me?"), 1);
+    stage_macroblock(FileBlock("Then why is the Interdimensional FBI after me?"));
     gs->render_microblock();
 
-    stage_macroblock(FileBlock("Oh, yeah, I don't think there's any diplomatic relationship between the US and extradimensional law enforcement. Those guys make up their own rules. It's more like an activist group than anything else, really."), 1);
+    stage_macroblock(FileBlock("Oh, yeah, I don't think there's any diplomatic relationship between the US and extradimensional law enforcement. Those guys make up their own rules. It's more like an activist group than anything else, really."));
     gs->render_microblock();
 
-    stage_macroblock(FileBlock("So, what? What they say doesn't matter?"), 1);
+    stage_macroblock(FileBlock("So, what? What they say doesn't matter?"));
     gs->render_microblock();
 
     gs->manager.transition(MICRO, {
@@ -390,7 +390,7 @@ void first_half() {
         {"space_w", "(a) 2 * sin (b) 2 * sin (c) 2 * sin + + (a) ^2 (b) ^2 (c) ^2 + + * 100 /"},
     });
 
-    stage_macroblock(FileBlock("Oh, no, you're probably screwed. Manipulating space is punishable by death in the 4th dimension."), 1);
+    stage_macroblock(FileBlock("Oh, no, you're probably screwed. Manipulating space is punishable by death in the 4th dimension."));
     gs->render_microblock();
 
     gs->manager.transition(MICRO, {
@@ -400,25 +400,25 @@ void first_half() {
         {"space_w", "0"},
     });
 
-    stage_macroblock(FileBlock("WHAT?"), 1);
+    stage_macroblock(FileBlock("WHAT?"));
     gs->render_microblock();
 
 // [Dealer] ...
 
-    stage_macroblock(FileBlock("Why does an interdimensional activist group want me dead for using it!?!"), 1);
+    stage_macroblock(FileBlock("Why does an interdimensional activist group want me dead for using it!?!"));
     gs->render_microblock();
 
-    stage_macroblock(FileBlock("It may look like a party toy, but manipulating the fabric of space can create some real problems..."), 1);
+    stage_macroblock(FileBlock("It may look like a party toy, but manipulating the fabric of space can create some real problems..."));
     gs->render_microblock();
 
-    stage_macroblock(FileBlock("What kind of problems?"), 1);
+    stage_macroblock(FileBlock("What kind of problems?"));
     gs->render_microblock();
 
     gs->manager.transition(MICRO, {
         {"space_w", "0"},
     });
 
-    stage_macroblock(FileBlock("See the button with the black circle in the top left?"), 1);
+    stage_macroblock(FileBlock("See the button with the black circle in the top left?"));
     gs->render_microblock();
 
     gs->manager.set({
@@ -432,36 +432,36 @@ void first_half() {
         {"bh", "-1"},
     });
 
-    stage_macroblock(FileBlock("That's the black hole button. Whatever you do, just don't press that one, and you're probably fine."), 1);
+    stage_macroblock(FileBlock("That's the black hole button. Whatever you do, just don't press that one, and you're probably fine."));
     gs->render_microblock();
 
     gs->manager.transition(MICRO, {
         {"bh", "10"},
     });
-    stage_macroblock(FileBlock("oh no oh no oh no"), 1);
+    stage_macroblock(FileBlock("oh no oh no oh no"));
     gs->render_microblock();
 
     gs->manager.set({
         {"space_w", "0"},
     });
 
-    stage_macroblock(FileBlock("Are you alright?"), 1);
+    stage_macroblock(FileBlock("Are you alright?"));
     gs->render_microblock();
     // 2swap takes a moment to gather composure
 
-    stage_macroblock(FileBlock("Let's start from the beginning. How exactly does this thing work?"), 1);
+    stage_macroblock(FileBlock("Let's start from the beginning. How exactly does this thing work?"));
     gs->render_microblock();
 
-    stage_macroblock(FileBlock("You've heard of space-time, right? Einstein conceived of space and time as being part of the same fabric, and that fabric can be manipulated by mass and energy."), 1);
+    stage_macroblock(FileBlock("You've heard of space-time, right? Einstein conceived of space and time as being part of the same fabric, and that fabric can be manipulated by mass and energy."));
     gs->render_microblock();
 
-    stage_macroblock(FileBlock("In my lab, we found a special kind of exotic matter which divorces the time component from the space components, allowing us to manipulate space alone."), 1);
+    stage_macroblock(FileBlock("In my lab, we found a special kind of exotic matter which divorces the time component from the space components, allowing us to manipulate space alone."));
     gs->render_microblock();
 
-    stage_macroblock(FileBlock("What exactly do you mean by manipulating space? It, like, warps the things around me?"), 1);
+    stage_macroblock(FileBlock("What exactly do you mean by manipulating space? It, like, warps the things around me?"));
     gs->render_microblock();
 
-    stage_macroblock(FileBlock("No, it warps space itself."), 1);
+    stage_macroblock(FileBlock("No, it warps space itself."));
     gs->render_microblock();
 }
 
@@ -501,17 +501,17 @@ void globe() {
     png_to_pix(pix, "map2");
     ms->set_texture(pix);
 
-    stage_macroblock(FileBlock("Think of it like this- Alaska and Norway look really far apart on a map."), 1);
+    stage_macroblock(FileBlock("Think of it like this- Alaska and Norway look really far apart on a map."));
     ms->render_microblock();
 
-    stage_macroblock(FileBlock("But when we curve that flat map into a globe, they end up close together."), 2);
+    stage_macroblock(FileBlock("But when we curve that flat map into a globe, they end up close together."));
     ms->manager.transition(MICRO, sphere);
     ms->manager.transition(MACRO, { {"q1", "1"}, {"qi", ".8"}, {"qj", "0"}, {"qk", "0"}, });
     ms->render_microblock();
     ms->manager.transition(MICRO, "d", "2");
     ms->render_microblock();
 
-    stage_macroblock(FileBlock("Furthermore, the straight line which connects the two is different on the globe than it is on the flat map."), 5);
+    stage_macroblock(FileBlock("Furthermore, the straight line which connects the two is different on the globe than it is on the flat map."));
     ms->manager.transition(MICRO, "d", "3");
     ms->render_microblock();
     ms->render_microblock();
@@ -521,7 +521,7 @@ void globe() {
     ms->manager.transition(MICRO, { {"q1", "1"}, {"qi", "0"}, {"qj", "0"}, {"qk", "0"}, });
     ms->render_microblock();
 
-    stage_macroblock(FileBlock("A map is two-dimensional, but by raising it into a three-dimensional space, we can manipulate its internal geometry."), 4);
+    stage_macroblock(FileBlock("A map is two-dimensional, but by raising it into a three-dimensional space, we can manipulate its internal geometry."));
     ms->manager.transition(MICRO, warpy_plane);
     ms->render_microblock();
     ms->render_microblock();
@@ -534,10 +534,10 @@ void globe() {
 void second_half() {
     shared_ptr<GeodesicScene> gs = make_shared<GeodesicScene>();
 
-    stage_macroblock(FileBlock("That device changes the curvature of your room, almost like we're raising it into a higher dimension."), 1);
+    stage_macroblock(FileBlock("That device changes the curvature of your room, almost like we're raising it into a higher dimension."));
     gs->render_microblock();
 
-    stage_macroblock(FileBlock("So, my room is entering and leaving the fourth dimension?"), 4);
+    stage_macroblock(FileBlock("So, my room is entering and leaving the fourth dimension?"));
     gs->render_microblock();
     gs->manager.transition(MICRO, "space_w", "(a) ^2 (b) ^2 (c) ^2 + + 5 /");
     gs->render_microblock();
@@ -545,7 +545,7 @@ void second_half() {
     gs->render_microblock();
     gs->render_microblock();
 
-    stage_macroblock(FileBlock("Well, maybe. As three dimensional beings, it's easy to imagine a curvy two-dimensional space via its embedding in our three-dimensional world."), 5);
+    stage_macroblock(FileBlock("Well, maybe. As three dimensional beings, it's easy to imagine a curvy two-dimensional space via its embedding in our three-dimensional world."));
     gs->render_microblock();
     gs->manager.transition(MICRO, "subscreen_size", "1");
     gs->render_microblock();
@@ -555,7 +555,7 @@ void second_half() {
     gs->render_microblock();
     gs->render_microblock();
 
-    stage_macroblock(FileBlock("This is an extrinsic perspective, since we perceive that curved space as it is embedded in our higher dimension. We call it extrinsic since we are percieving the curvature of the space from outside of that space."), 1);
+    stage_macroblock(FileBlock("This is an extrinsic perspective, since we perceive that curved space as it is embedded in our higher dimension. We call it extrinsic since we are percieving the curvature of the space from outside of that space."));
     gs->manager.transition(MICRO, "pov_max_dist", "0");
     gs->render_microblock();
     gs->manager.set("a", "0");
@@ -568,22 +568,22 @@ void second_half() {
     gs->manager.transition(MICRO, "subscreen_size", "0.5");
     gs->render_microblock();
 
-    stage_macroblock(FileBlock("However, there is an equivalent point of view called the intrinsic perspective, where we can understand the geometry of a curved space from local measurements of angles, distances, and so on, without needing to embed it within a higher dimension at all."), 1);
+    stage_macroblock(FileBlock("However, there is an equivalent point of view called the intrinsic perspective, where we can understand the geometry of a curved space from local measurements of angles, distances, and so on, without needing to embed it within a higher dimension at all."));
     gs->render_microblock();
 
-    stage_macroblock(FileBlock("For example, when crocheting, we can create a flat sheet by making a regular grid of stitches. By altering the amount of stitches in different areas, we can create a curved surface."), 1);
+    stage_macroblock(FileBlock("For example, when crocheting, we can create a flat sheet by making a regular grid of stitches. By altering the amount of stitches in different areas, we can create a curved surface."));
     gs->render_microblock();
 
-    stage_macroblock(FileBlock("But distances in this surface don't depend on its embedding in three-dimensional space: the way that it curves in space is the result of the length of the strings holding it together, not the cause."), 1);
+    stage_macroblock(FileBlock("But distances in this surface don't depend on its embedding in three-dimensional space: the way that it curves in space is the result of the length of the strings holding it together, not the cause."));
     gs->render_microblock();
 
-    stage_macroblock(FileBlock("This reflects the intrinsic perspective, where geometry is defined within the fabric of a particular space, independent of the space it's placed in."), 1);
+    stage_macroblock(FileBlock("This reflects the intrinsic perspective, where geometry is defined within the fabric of a particular space, independent of the space it's placed in."));
     gs->render_microblock();
 
-    stage_macroblock(FileBlock("In differential geometry, this is known as Gauss's Theorema Egregium."), 1);
+    stage_macroblock(FileBlock("In differential geometry, this is known as Gauss's Theorema Egregium."));
     gs->render_microblock();
 
-    stage_macroblock(FileBlock("Gauss showed that these two perspectives are mathematically equivalent. The device merely displays the extrinsic embedding to make it easier to visualize the curvature at play."), 5);
+    stage_macroblock(FileBlock("Gauss showed that these two perspectives are mathematically equivalent. The device merely displays the extrinsic embedding to make it easier to visualize the curvature at play."));
     gs->render_microblock();
     gs->render_microblock();
     gs->render_microblock();
@@ -592,32 +592,32 @@ void second_half() {
     gs->manager.transition(MICRO, "subscreen_size", "0.5");
     gs->render_microblock();
 
-    stage_macroblock(FileBlock("Ok... so if I'm understanding you right, the device manipulates the curvature of this space, within which my walls live, but it doesn't actually move the walls themselves. So, why do my walls look like they're moving when I turn it on?"), 3);
+    stage_macroblock(FileBlock("Ok... so if I'm understanding you right, the device manipulates the curvature of this space, within which my walls live, but it doesn't actually move the walls themselves. So, why do my walls look like they're moving when I turn it on?"));
     gs->render_microblock();
     gs->manager.transition(MICRO, "space_w", "(a) sin (b) sin +");
     gs->render_microblock();
     gs->manager.transition(MICRO, "space_w", "0");
     gs->render_microblock();
 
-    stage_macroblock(FileBlock("Remember how the straight line on the map is different from the straight line on the globe? It's the same idea here."), 1);
+    stage_macroblock(FileBlock("Remember how the straight line on the map is different from the straight line on the globe? It's the same idea here."));
     gs->render_microblock();
 
-    stage_macroblock(FileBlock("Light itself follows straight lines. So if the geometry of space is warped, the straight line that light follows before reaching your eyes is different, and thus the image of the walls that you see is warped as well."), 1);
+    stage_macroblock(FileBlock("Light itself follows straight lines. So if the geometry of space is warped, the straight line that light follows before reaching your eyes is different, and thus the image of the walls that you see is warped as well."));
     gs->render_microblock();
 
-    stage_macroblock(FileBlock("How can a straight line not be straight?"), 1);
+    stage_macroblock(FileBlock("How can a straight line not be straight?"));
     gs->render_microblock();
 
-    stage_macroblock(FileBlock("You're right, it's not really a suitable word. The idea of straightness only really makes sense in a flat geometry, that is, a geometry we call Euclidean. In a non-Euclidean geometry, we call these straight lines geodesics."), 1);
+    stage_macroblock(FileBlock("You're right, it's not really a suitable word. The idea of straightness only really makes sense in a flat geometry, that is, a geometry we call Euclidean. In a non-Euclidean geometry, we call these straight lines geodesics."));
     gs->render_microblock();
 
-    stage_macroblock(FileBlock("If a boat sails the arctic ocean from Alaska to Norway, to the sailor, the path seems straight."), 1);
+    stage_macroblock(FileBlock("If a boat sails the arctic ocean from Alaska to Norway, to the sailor, the path seems straight."));
     gs->render_microblock();
 
-    stage_macroblock(FileBlock("But on the globe, you are actually curving downwards since the Earth isn't flat. A geodesic is a curve like this- when you're stuck on a curvy surface and walk straight without turning left or right, even though the space underlying you might pull you some way or the other, you're following a geodesic."), 1);
+    stage_macroblock(FileBlock("But on the globe, you are actually curving downwards since the Earth isn't flat. A geodesic is a curve like this- when you're stuck on a curvy surface and walk straight without turning left or right, even though the space underlying you might pull you some way or the other, you're following a geodesic."));
     gs->render_microblock();
 
-    stage_macroblock(FileBlock("The light inside your room follows a geodesic curve in non-euclidean space."), 1);
+    stage_macroblock(FileBlock("The light inside your room follows a geodesic curve in non-euclidean space."));
     gs->render_microblock();
 }
 

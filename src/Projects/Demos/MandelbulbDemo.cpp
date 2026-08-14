@@ -2,7 +2,7 @@
 
 void render_video() {
     MandelbulbScene ms;
-    stage_macroblock(SilenceBlock(10), 3);
+    stage_macroblock(SilenceBlock(10));
     ms.manager.transition(MICRO, "qj", "1");
     ms.render_microblock();
     ms.manager.transition(MICRO, "d", "1.1");

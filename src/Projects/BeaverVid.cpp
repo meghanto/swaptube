@@ -141,7 +141,7 @@ void TNF3Dtest() {
     bs.manager.set("brightness_offset", "<zoom> -0.06 *");
     bs.manager.set("color_source_depth", "3");
     //bs.manager.set("brightness_offset", "0.3 <zoom> 3 ^ 125 / -");
-    stage_macroblock(SilenceBlock(2), 1);
+    stage_macroblock(SilenceBlock(2));
     bs.manager.transition(MICRO, "zoom", "0");
     //bs.manager.transition(MICRO, "q1", "0.15");
     //bs.manager.set("q1", "0.15");
@@ -202,7 +202,7 @@ void preintro(CompositeScene& cs) {
         {"color_source_depth", "<zoom> 1.5 * 3.6 +"}
     });
 
-    stage_macroblock(FileBlock("You are looking at the space of all computer programs."), 1);
+    stage_macroblock(FileBlock("You are looking at the space of all computer programs."));
     tnfs->manager.transition(MICRO, "zoom", "0");
     cs.render_microblock();
 
@@ -226,7 +226,7 @@ void preintro(CompositeScene& cs) {
         {"iterations", "0"}
     });
 
-    stage_macroblock(FileBlock("Most of them just loop forever,"), 3);
+    stage_macroblock(FileBlock("Most of them just loop forever,"));
     cs.manager.set("tms.x", "1");
     cs.manager.transition(MICRO, "tms.x", "0.65");
     cs.manager.transition(MICRO, "tnfs.x", "0.3");
@@ -287,7 +287,7 @@ void preintro(CompositeScene& cs) {
         {"zoom", "-1.5 <iterations> 4.5 - 200 / -"},
         {"iterations", "4.5"}
     });
-    stage_macroblock(FileBlock("or bounce from side to side."), 2);
+    stage_macroblock(FileBlock("or bounce from side to side."));
 
     tms->manager.transition(MICRO, "iterations", "50");
     tnfs->manager.set({
@@ -328,7 +328,7 @@ void preintro(CompositeScene& cs) {
         {"zoom", "-1.5 <iterations> 4.5 - 400 / -"},
         {"iterations", "4.5"}
     });
-    stage_macroblock(FileBlock("Some count to infinity, usually in binary."), 2);
+    stage_macroblock(FileBlock("Some count to infinity, usually in binary."));
 
     tms->manager.transition(MICRO, "iterations", "100");
     tnfs->manager.set({
@@ -355,7 +355,7 @@ void preintro(CompositeScene& cs) {
     });
     cs.render_microblock();
 
-    stage_macroblock(FileBlock("But occasionally,"), 1);
+    stage_macroblock(FileBlock("But occasionally,"));
     cs.manager.transition(MICRO, "tms.x", "0.75");
     tms->manager.transition(MICRO, {
         {"iterations", "0"},
@@ -392,7 +392,7 @@ void preintro(CompositeScene& cs) {
         {"zoom", "-1.5 <iterations> 500 / -"},
         {"iterations", "0"}
     });
-    stage_macroblock(FileBlock("you might stumble upon Cryptids, the lovecraftian machines gatekeeping the borders of computation and knowability itself."), 1);
+    stage_macroblock(FileBlock("you might stumble upon Cryptids, the lovecraftian machines gatekeeping the borders of computation and knowability itself."));
 
     tms->manager.transition(MICRO, {
         {"iterations", "600"},
@@ -419,7 +419,7 @@ void preintro(CompositeScene& cs) {
         {"target_z", std::to_string(center.z)}
     });
 
-    stage_macroblock(SilenceBlock(2), 1);
+    stage_macroblock(SilenceBlock(2));
     cs.fade_all_subscenes(MICRO, 0);
     cs.render_microblock();
     cs.remove_all_subscenes();
@@ -458,10 +458,10 @@ void intro(CompositeScene& cs) {
     std::string latex_string = "Beavers";
     shared_ptr<LatexScene> ls = make_shared<LatexScene>(latex_string, 0.6);
 
-    stage_macroblock(FileBlock("But what even is a computer program?"), 1);
+    stage_macroblock(FileBlock("But what even is a computer program?"));
     cs.render_microblock();
 
-    stage_macroblock(FileBlock("First, we need to learn how Beavers work."), 3);
+    stage_macroblock(FileBlock("First, we need to learn how Beavers work."));
     cs.add_scene_fade_in(MICRO, ls, "ls");
     cs.render_microblock();
     cs.render_microblock();
@@ -486,7 +486,7 @@ void intro(CompositeScene& cs) {
         {"center_y", "<iterations> <vertical_step> * 0.5 +"},
     });
 
-    stage_macroblock(FileBlock("Bella the Beaver lives along an infinite river, divided into sections."), 2);
+    stage_macroblock(FileBlock("Bella the Beaver lives along an infinite river, divided into sections."));
     cs.add_scene_fade_in(MICRO, tms, "bella_tms");
     tms->manager.transition(MICRO, {
         {"dir_icon_scale", "1"},
@@ -494,7 +494,7 @@ void intro(CompositeScene& cs) {
     cs.render_microblock();
     cs.render_microblock();
 
-    stage_macroblock(FileBlock("She can build and destroy a dam in each section."), 2);
+    stage_macroblock(FileBlock("She can build and destroy a dam in each section."));
     tms->manager.transition(MICRO, {
         {"beav_time", "2.6"},
     });
@@ -504,16 +504,16 @@ void intro(CompositeScene& cs) {
     });
     cs.render_microblock();
 
-    stage_macroblock(FileBlock("Here's how Bella settled in when she first found this river."), 1);
+    stage_macroblock(FileBlock("Here's how Bella settled in when she first found this river."));
     cs.render_microblock();
 
-    stage_macroblock(FileBlock("She built a dam, walked around for a while, built another dam, and then she retired."), 1);
+    stage_macroblock(FileBlock("She built a dam, walked around for a while, built another dam, and then she retired."));
     tms->manager.transition(MICRO, {
         {"beav_time", "13"},
     }, false);
     cs.render_microblock();
 
-    stage_macroblock(FileBlock("To understand what she's doing, let's take a look inside her head."), 3);
+    stage_macroblock(FileBlock("To understand what she's doing, let's take a look inside her head."));
     cs.render_microblock();
     cs.render_microblock();
     tms->manager.transition(MICRO, {
@@ -523,7 +523,7 @@ void intro(CompositeScene& cs) {
     });
     cs.render_microblock();
 
-    stage_macroblock(FileBlock("On any given day, Bella wakes up feeling either Ambitious or Bitter."), 1);
+    stage_macroblock(FileBlock("On any given day, Bella wakes up feeling either Ambitious or Bitter."));
     tms->manager.set({
         {"table_cell_margin", "0"},
     });
@@ -532,49 +532,49 @@ void intro(CompositeScene& cs) {
     });
     cs.render_microblock();
 
-    stage_macroblock(FileBlock("Depending on her mood, and whether there's a dam in the section she's in, she decides what she will do today."), 1);
+    stage_macroblock(FileBlock("Depending on her mood, and whether there's a dam in the section she's in, she decides what she will do today."));
     tms->manager.transition(MICRO, {
         {"table_h0", "1"},
     });
     cs.render_microblock();
 
-    stage_macroblock(FileBlock("On the day she arrived, Bella felt Ambitious."), 1);
+    stage_macroblock(FileBlock("On the day she arrived, Bella felt Ambitious."));
     tms->manager.transition(MICRO, {
         {"beav_time", "1"},
     }, false);
     cs.render_microblock();
 
-    stage_macroblock(FileBlock("If Bella feels Ambitious and there's no dam, she builds a dam, moves right, and becomes Bitter."), 1);
+    stage_macroblock(FileBlock("If Bella feels Ambitious and there's no dam, she builds a dam, moves right, and becomes Bitter."));
     tms->manager.transition(MICRO, {
         {"beav_time", "3.5"},
     }, false);
     cs.render_microblock();
 
-    stage_macroblock(FileBlock("If Bella feels Bitter and there's no dam, she doesn't build a dam, moves left, and becomes Ambitious."), 1);
+    stage_macroblock(FileBlock("If Bella feels Bitter and there's no dam, she doesn't build a dam, moves left, and becomes Ambitious."));
     tms->manager.transition(MICRO, {
         {"beav_time", "6"},
     }, false);
     cs.render_microblock();
 
-    stage_macroblock(FileBlock("If Bella's Ambitious and there's a dam, she keeps the dam there, moves left, and stays Ambitious."), 1);
+    stage_macroblock(FileBlock("If Bella's Ambitious and there's a dam, she keeps the dam there, moves left, and stays Ambitious."));
     tms->manager.transition(MICRO, {
         {"beav_time", "8.5"},
     }, false);
     cs.render_microblock();
 
-    stage_macroblock(FileBlock("Now Bella is Ambitious and there's no dam again, so she builds one, goes right, and becomes Bitter."), 1);
+    stage_macroblock(FileBlock("Now Bella is Ambitious and there's no dam again, so she builds one, goes right, and becomes Bitter."));
     tms->manager.transition(MICRO, {
         {"beav_time", "11"},
     }, false);
     cs.render_microblock();
 
-    stage_macroblock(FileBlock("And finally, if Bella feels Bitter and there's a dam, she decides she has built enough, and retires."), 1);
+    stage_macroblock(FileBlock("And finally, if Bella feels Bitter and there's a dam, she decides she has built enough, and retires."));
     tms->manager.transition(MICRO, {
         {"beav_time", "13"},
     }, false);
     cs.render_microblock();
 
-    stage_macroblock(SilenceBlock(3), 1);
+    stage_macroblock(SilenceBlock(3));
     /*tms->manager.set({
         {"show_all_transitions", "1"},
     });*/
@@ -606,13 +606,13 @@ void intro(CompositeScene& cs) {
     });
     //tms2->transitions_to_show = 0x00000000;
 
-    stage_macroblock(FileBlock("Meet Bella's friend, Bob. Bob is very similar to Bella, except for one little change."), 1);
+    stage_macroblock(FileBlock("Meet Bella's friend, Bob. Bob is very similar to Bella, except for one little change."));
     tms->manager.transition(MICRO, {
         {"beav_time", "5.75"},
     });
     cs.render_microblock();
 
-    stage_macroblock(FileBlock("When he feels Ambitious and there's a dam, he keeps the dam there and moves left, but he becomes Bitter."), 1);
+    stage_macroblock(FileBlock("When he feels Ambitious and there's a dam, he keeps the dam there and moves left, but he becomes Bitter."));
     //cs.fade_subscene(MICRO, "bella_tms", 0);
     //cs.add_scene_fade_in(MICRO, tms2, "bob_tms");
     //cs.render_microblock();
@@ -623,7 +623,7 @@ void intro(CompositeScene& cs) {
     }, false);
     cs.render_microblock();
 
-    stage_macroblock(FileBlock("Hypothetically, if Bob was Bitter in a section of the river with a dam, he would also retire. But unfortunately, that never happens."), 1);
+    stage_macroblock(FileBlock("Hypothetically, if Bob was Bitter in a section of the river with a dam, he would also retire. But unfortunately, that never happens."));
     double global_t = get_global_state("t");
     tms2->manager.transition(MICRO, {
         {"beav_time", "{t} " + std::to_string(global_t) + " - 1.5 ^ 8.5 +"},
@@ -632,7 +632,7 @@ void intro(CompositeScene& cs) {
     });
     cs.render_microblock();
 
-    stage_macroblock(FileBlock("Bob is a perfectionist. He will never be content with his work."), 1);
+    stage_macroblock(FileBlock("Bob is a perfectionist. He will never be content with his work."));
     cs.render_microblock();
 }
 
@@ -653,7 +653,7 @@ void cryptids(CompositeScene& cs) {
 
 void grid_test() {
     BeaverGridSpacetimeScene gs = BeaverGridSpacetimeScene();
-    stage_macroblock(SilenceBlock(5), 2);
+    stage_macroblock(SilenceBlock(5));
     gs.manager.transition(MACRO, "iterations", "100");
     gs.manager.transition(MICRO, "center_x", "0.9");
     gs.manager.transition(MICRO, "center_y", "0.6");
