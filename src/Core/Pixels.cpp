@@ -465,8 +465,10 @@ void Pixels::print_to_terminal() {
     CONSOLE_SCREEN_BUFFER_INFO info;
     int termWidth = 80;
     HANDLE handle = GetStdHandle(STD_OUTPUT_HANDLE);
-    SetConsoleOutputCP(CP_UTF8);
+    UINT originalCodePage = 0;
     if (handle != INVALID_HANDLE_VALUE && GetConsoleScreenBufferInfo(handle, &info)) {
+        originalCodePage = GetConsoleOutputCP();
+        if (originalCodePage != CP_UTF8) SetConsoleOutputCP(CP_UTF8);
         termWidth = info.srWindow.Right - info.srWindow.Left + 1;
         if (termWidth <= 0) termWidth = 80;
     }
@@ -530,6 +532,9 @@ void Pixels::print_to_terminal() {
     const string output = frame.str();
     cout.write(output.data(), static_cast<streamsize>(output.size()));
     cout.flush();
+#ifdef _WIN32
+    if (originalCodePage != 0 && originalCodePage != CP_UTF8) SetConsoleOutputCP(originalCodePage);
+#endif
 }
 
 // Free functions implementations

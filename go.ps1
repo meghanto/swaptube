@@ -65,110 +65,88 @@ function Find-VcVars64 {
     throw 'Unable to locate vcvars64.bat. Install Visual Studio 2022 with the C++ workload.'
 }
 
+function Get-FileIdentity([string]$Path) {
+    if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) { return $null }
+    $item = Get-Item -LiteralPath $Path
+    return [ordered]@{
+        Path = $item.FullName
+        Length = $item.Length
+        LastWriteTimeUtc = $item.LastWriteTimeUtc.Ticks
+    }
+}
+
+function Get-DirectoryState([string[]]$Paths) {
+    $state = @()
+    foreach ($path in $Paths) {
+        if (-not $path -or -not (Test-Path -LiteralPath $path -PathType Container)) { continue }
+        $state += Get-ChildItem -LiteralPath $path -Directory | ForEach-Object {
+            [ordered]@{ Name = $_.FullName; LastWriteTimeUtc = $_.LastWriteTimeUtc.Ticks }
+        }
+    }
+    return @($state | Sort-Object -Property Name)
+}
+
+function Get-FileSha256([string]$Path) {
+    $stream = [System.IO.File]::OpenRead($Path)
+    $hasher = [System.Security.Cryptography.SHA256]::Create()
+    try {
+        return [System.BitConverter]::ToString($hasher.ComputeHash($stream)).Replace('-', '').ToLowerInvariant()
+    } finally {
+        $stream.Dispose()
+        $hasher.Dispose()
+    }
+}
+
+function Read-JsonCache([string]$Path) {
+    if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) { return $null }
+    try {
+        return Get-Content -LiteralPath $Path -Raw | ConvertFrom-Json
+    } catch {
+        return $null
+    }
+}
+
+function Test-StateEqual($Left, $Right) {
+    if ($null -eq $Left -or $null -eq $Right) { return $false }
+    return (($Left | ConvertTo-Json -Depth 20 -Compress) -eq
+            ($Right | ConvertTo-Json -Depth 20 -Compress))
+}
+
+function Write-JsonCache([string]$Path, $Value) {
+    try {
+        $temporaryPath = "$Path.$([Guid]::NewGuid().ToString('N')).tmp"
+        $Value | ConvertTo-Json -Depth 20 | Set-Content -LiteralPath $temporaryPath -Encoding UTF8
+        Move-Item -LiteralPath $temporaryPath -Destination $Path -Force
+    } catch {
+        if ($temporaryPath) { Remove-Item -LiteralPath $temporaryPath -Force -ErrorAction SilentlyContinue }
+    }
+}
+
 function Import-VcVars64([string]$VcVarsPath) {
     # Run vcvars64.bat in a child with a deliberately small environment. A
     # developer shell can retain enough stale VS variables to exceed cmd.exe's
     # 8191-character input-line limit even after PATH itself is shortened.
     $originalPath = $env:PATH
 
-    $cachePath = Join-Path $buildDir 'vcvars_cache.json'
-    $cacheIsValid = $false
-    $cachedData = $null
-
-    # 1. Gather current state key
     $canonicalVcVars = (Get-Item -LiteralPath $VcVarsPath).FullName
-    $vcVarsItem = Get-Item -LiteralPath $canonicalVcVars
-    $vcVarsLastWrite = $vcVarsItem.LastWriteTimeUtc.Ticks
-    $vcVarsLength = $vcVarsItem.Length
-
-    $sdkMsvcState = @()
-    try {
-        $vcDir = Split-Path (Split-Path (Split-Path $canonicalVcVars -Parent) -Parent) -Parent
-        $msvcToolsDir = Join-Path $vcDir 'Tools\MSVC'
-        if (Test-Path -LiteralPath $msvcToolsDir -PathType Container) {
-            foreach ($d in Get-ChildItem -LiteralPath $msvcToolsDir -Directory) {
-                $sdkMsvcState += @{
-                    Path = $d.FullName
-                    LastWrite = $d.LastWriteTimeUtc.Ticks
-                }
-            }
-        }
-    } catch {}
-
-    try {
-        $kitsPaths = @(
-            "${env:ProgramFiles(x86)}\Windows Kits\10",
-            "$env:ProgramFiles\Windows Kits\10",
-            "${env:ProgramFiles(x86)}\Windows Kits\11",
-            "$env:ProgramFiles\Windows Kits\11"
-        )
-        foreach ($kitPath in $kitsPaths) {
-            if (Test-Path -LiteralPath $kitPath -PathType Container) {
-                foreach ($sub in @('Lib', 'Include')) {
-                    $subPath = Join-Path $kitPath $sub
-                    if (Test-Path -LiteralPath $subPath -PathType Container) {
-                        foreach ($d in Get-ChildItem -LiteralPath $subPath -Directory) {
-                            $sdkMsvcState += @{
-                                Path = $d.FullName
-                                LastWrite = $d.LastWriteTimeUtc.Ticks
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    } catch {}
-
-    # Sort state by path to keep it deterministic
-    $sdkMsvcState = $sdkMsvcState | Sort-Object -Property Path
-
+    $vcRoot = Split-Path (Split-Path (Split-Path $canonicalVcVars -Parent) -Parent) -Parent
+    $toolchainRoots = @(
+        (Join-Path $vcRoot 'Tools\MSVC'),
+        "${env:ProgramFiles(x86)}\Windows Kits\10\Include",
+        "${env:ProgramFiles(x86)}\Windows Kits\10\Lib",
+        "$env:ProgramFiles\Windows Kits\10\Include",
+        "$env:ProgramFiles\Windows Kits\10\Lib"
+    )
     $currentKey = [ordered]@{
-        SchemaVersion = 1
-        VcVarsPath = $canonicalVcVars
-        VcVarsLastWriteTimeUtc = $vcVarsLastWrite
-        VcVarsLength = $vcVarsLength
+        SchemaVersion = 2
+        VcVars = Get-FileIdentity $canonicalVcVars
         ProcessorArchitecture = $env:PROCESSOR_ARCHITECTURE
-        SdkMsvcState = $sdkMsvcState
+        ToolchainDirectories = Get-DirectoryState $toolchainRoots
     }
+    $cachePath = Join-Path $buildDir 'vcvars-cache.json'
+    $cachedData = Read-JsonCache $cachePath
 
-    # Try to load and validate cache
-    if (Test-Path -LiteralPath $cachePath -PathType Leaf) {
-        try {
-            $cachedData = Get-Content -LiteralPath $cachePath -Raw | ConvertFrom-Json
-            if ($cachedData -and $cachedData.Metadata -and $cachedData.Environment) {
-                $meta = $cachedData.Metadata
-                if (($meta.SchemaVersion -eq 1) -and
-                    ($meta.VcVarsPath -eq $currentKey.VcVarsPath) -and
-                    ([long]$meta.VcVarsLastWriteTimeUtc -eq $currentKey.VcVarsLastWriteTimeUtc) -and
-                    ([long]$meta.VcVarsLength -eq $currentKey.VcVarsLength) -and
-                    ($meta.ProcessorArchitecture -eq $currentKey.ProcessorArchitecture)) {
-
-                    $cachedState = @($meta.SdkMsvcState)
-                    $currentState = @($currentKey.SdkMsvcState)
-
-                    if ($cachedState.Count -eq $currentState.Count) {
-                        $stateMatch = $true
-                        for ($i = 0; $i -lt $currentState.Count; $i++) {
-                            $cachedItem = $cachedState[$i]
-                            $currentItem = $currentState[$i]
-                            if (($cachedItem.Path -ne $currentItem.Path) -or ([long]$cachedItem.LastWrite -ne [long]$currentItem.LastWrite)) {
-                                $stateMatch = $false
-                                break
-                            }
-                        }
-                        if ($stateMatch) {
-                            $cacheIsValid = $true
-                        }
-                    }
-                }
-            }
-        } catch {
-            # Corrupt cache must silently regenerate
-            $cacheIsValid = $false
-        }
-    }
-
-    if ($cacheIsValid -and $cachedData.Environment.PATH) {
+    if ($cachedData -and (Test-StateEqual $cachedData.Metadata $currentKey) -and $cachedData.Environment.PATH) {
         # Restore environment variables
         foreach ($prop in $cachedData.Environment.PSObject.Properties) {
             if ($prop.Name -ne 'PATH') {
@@ -186,7 +164,6 @@ function Import-VcVars64([string]$VcVarsPath) {
         return
     }
 
-    # Minimal Path and Child Process setup
     $minimalPath = @(
         (Join-Path $env:SystemRoot 'System32'),
         $env:SystemRoot,
@@ -247,24 +224,10 @@ function Import-VcVars64([string]$VcVarsPath) {
     }
     if (-not $vcPath) { throw 'vcvars64.bat did not return a PATH variable.' }
 
-    # Write cache atomically if practical
-    try {
-        if (-not (Test-Path -LiteralPath $buildDir -PathType Container)) {
-            New-Item -ItemType Directory -Force -Path $buildDir | Out-Null
-        }
-        $cacheData = [ordered]@{
+    Write-JsonCache $cachePath ([ordered]@{
             Metadata = $currentKey
             Environment = $envToCache
-        }
-        $tempPath = "$cachePath.tmp"
-        $cacheData | ConvertTo-Json -Depth 20 | Set-Content -LiteralPath $tempPath -Encoding UTF8
-        if (Test-Path -LiteralPath $cachePath) {
-            Remove-Item -LiteralPath $cachePath -Force -ErrorAction SilentlyContinue
-        }
-        Move-Item -LiteralPath $tempPath -Destination $cachePath -Force
-    } catch {
-        # Silently ignore cache write failures
-    }
+        })
 
     $callerPath = @($originalPath -split ';') |
         Where-Object { $_ -and $_ -notmatch '(?i)\\Microsoft Visual Studio\\|\\Windows Kits\\' }
@@ -298,86 +261,21 @@ function Assert-Msys2PackageLock([string]$Msys2Root) {
         throw "Unable to verify MSYS2 dependency versions because pacman.exe was not found at $pacman"
     }
 
-    # Gather cache keys
-    $lockHash = ""
-    try {
-        $hasher = [System.Security.Cryptography.SHA256]::Create()
-        $inputStream = [System.IO.File]::OpenRead($lockPath)
-        $hashBytes = $hasher.ComputeHash($inputStream)
-        $inputStream.Close()
-        $lockHash = [System.BitConverter]::ToString($hashBytes).Replace("-", "").ToLower()
-    } catch {
-        $lockHash = "error"
-    }
-
-    $pacmanItem = Get-Item -LiteralPath $pacman
-    $pacmanLastWrite = $pacmanItem.LastWriteTimeUtc.Ticks
-    $pacmanLength = $pacmanItem.Length
-
     $dbDir = Join-Path $Msys2Root 'var\lib\pacman\local'
-    $dbState = @()
-    if (Test-Path -LiteralPath $dbDir -PathType Container) {
-        try {
-            foreach ($d in Get-ChildItem -LiteralPath $dbDir -Directory) {
-                $dbState += @{
-                    Name = $d.Name
-                    LastWrite = $d.LastWriteTimeUtc.Ticks
-                }
-            }
-        } catch {}
+    if (-not (Test-Path -LiteralPath $dbDir -PathType Container)) {
+        throw "MSYS2 package database was not found at $dbDir"
     }
-    $dbState = $dbState | Sort-Object -Property Name
-
-    $canonicalMsys2Root = (Get-Item -LiteralPath $Msys2Root).FullName
     $currentMsysKey = [ordered]@{
-        SchemaVersion = 1
-        Msys2Root = $canonicalMsys2Root
-        LockHash = $lockHash
-        PacmanLastWriteTimeUtc = $pacmanLastWrite
-        PacmanLength = $pacmanLength
-        DbState = $dbState
+        SchemaVersion = 2
+        Msys2Root = (Get-Item -LiteralPath $Msys2Root).FullName
+        LockHash = Get-FileSha256 $lockPath
+        Pacman = Get-FileIdentity $pacman
+        PackageDatabase = Get-DirectoryState @($dbDir)
     }
 
-    $msysCachePath = Join-Path $buildDir 'msys_validation_cache.json'
-    $msysCacheIsValid = $false
-
-    if (Test-Path -LiteralPath $msysCachePath -PathType Leaf) {
-        try {
-            $cachedMsysData = Get-Content -LiteralPath $msysCachePath -Raw | ConvertFrom-Json
-            if ($cachedMsysData) {
-                if (($cachedMsysData.SchemaVersion -eq 1) -and
-                    ($cachedMsysData.Msys2Root -eq $currentMsysKey.Msys2Root) -and
-                    ($cachedMsysData.LockHash -eq $currentMsysKey.LockHash) -and
-                    ([long]$cachedMsysData.PacmanLastWriteTimeUtc -eq $currentMsysKey.PacmanLastWriteTimeUtc) -and
-                    ([long]$cachedMsysData.PacmanLength -eq $currentMsysKey.PacmanLength)) {
-
-                    $cachedDbState = @($cachedMsysData.DbState)
-                    $currentDbState = @($currentMsysKey.DbState)
-
-                    if ($cachedDbState.Count -eq $currentDbState.Count) {
-                        $stateMatch = $true
-                        for ($i = 0; $i -lt $currentDbState.Count; $i++) {
-                            $cachedItem = $cachedDbState[$i]
-                            $currentItem = $currentDbState[$i]
-                            if (($cachedItem.Name -ne $currentItem.Name) -or ([long]$cachedItem.LastWrite -ne [long]$currentItem.LastWrite)) {
-                                $stateMatch = $false
-                                break
-                            }
-                        }
-                        if ($stateMatch) {
-                            $msysCacheIsValid = $true
-                        }
-                    }
-                }
-            }
-        } catch {
-            $msysCacheIsValid = $false
-        }
-    }
-
-    if ($msysCacheIsValid) {
-        return
-    }
+    $msysCachePath = Join-Path $buildDir 'msys-validation-cache.json'
+    $cachedMsysKey = Read-JsonCache $msysCachePath
+    if (Test-StateEqual $cachedMsysKey $currentMsysKey) { return }
 
     # If cache not valid, perform verification calling pacman -Q only once
     $pacmanOutput = & $pacman -Q 2>$null
@@ -419,20 +317,7 @@ function Assert-Msys2PackageLock([string]$Msys2Root) {
         throw "MSYS2 dependency versions do not match windows-msys2.lock:`n  $($mismatches -join "`n  ")`nSee WINDOWS.md for the exact installation command."
     }
 
-    # Successful validation, write cache
-    try {
-        if (-not (Test-Path -LiteralPath $buildDir -PathType Container)) {
-            New-Item -ItemType Directory -Force -Path $buildDir | Out-Null
-        }
-        $tempMsysCachePath = "$msysCachePath.tmp"
-        $currentMsysKey | ConvertTo-Json -Depth 20 | Set-Content -LiteralPath $tempMsysCachePath -Encoding UTF8
-        if (Test-Path -LiteralPath $msysCachePath) {
-            Remove-Item -LiteralPath $msysCachePath -Force -ErrorAction SilentlyContinue
-        }
-        Move-Item -LiteralPath $tempMsysCachePath -Destination $msysCachePath -Force
-    } catch {
-        # Silently ignore cache write failures
-    }
+    Write-JsonCache $msysCachePath $currentMsysKey
 }
 
 function Find-FfmpegRoot {
@@ -545,6 +430,30 @@ try {
         $env:PATH = "$(Join-Path $ffmpegRoot 'bin');$env:PATH"
     }
 
+    $configurationFiles = @()
+    foreach ($name in @('CMakeLists.txt', 'local.cmake', 'local_override.cmake')) {
+        $path = Join-Path $repoRoot $name
+        if (Test-Path -LiteralPath $path -PathType Leaf) {
+            $identity = Get-FileIdentity $path
+            $identity['Sha256'] = Get-FileSha256 $path
+            $configurationFiles += $identity
+        }
+    }
+    $computeCompilerName = if ($ComputeLang -eq 'HIP') { 'hipcc.exe' } else { 'nvcc.exe' }
+    $computeCompilerCommand = Get-Command $computeCompilerName -ErrorAction SilentlyContinue
+    $computeCompilerIdentity = if ($computeCompilerCommand) { Get-FileIdentity $computeCompilerCommand.Source } else { $null }
+    $configurationState = [ordered]@{
+        SchemaVersion = 2
+        CMake = Get-FileIdentity $cmakeExecutable
+        CMakeVersion = $cmakeVersion
+        Ninja = Get-FileIdentity $ninjaExecutable
+        NinjaVersion = $ninjaVersion
+        CxxCompiler = Get-FileIdentity $cxxCompiler
+        ComputeCompiler = $computeCompilerIdentity
+        Arguments = @($cmakeArgs)
+        ConfigurationFiles = $configurationFiles
+    }
+
     Remove-Item -LiteralPath $ioIn, $ioOut -Recurse -Force -ErrorAction SilentlyContinue
     New-Item -ItemType Directory -Force -Path $ioIn, (Join-Path $ioOut 'frames') | Out-Null
     Copy-Item -Path (Join-Path $inputDir '*') -Destination $ioIn -Recurse -Force -ErrorAction SilentlyContinue
@@ -553,50 +462,14 @@ try {
     Push-Location $buildDir
     try {
         $buildNinja = Join-Path $buildDir 'build.ninja'
-        $cmakeCache = Join-Path $buildDir 'CMakeCache.txt'
-        $toolStatePath = Join-Path $buildDir 'swaptube-build-tools.json'
-        $toolState = [ordered]@{
-            cmake_path = $cmakeExecutable
-            cmake_version = $cmakeVersion
-            ninja_path = $ninjaExecutable
-            ninja_version = $ninjaVersion
-        }
-        $needsConfigure = -not (Test-Path -LiteralPath $buildNinja -PathType Leaf)
-        if (-not $needsConfigure) {
-            $savedToolState = $null
-            if (Test-Path -LiteralPath $toolStatePath -PathType Leaf) {
-                try {
-                    $savedToolState = Get-Content -LiteralPath $toolStatePath -Raw | ConvertFrom-Json
-                } catch {
-                    Write-Host "go.ps1: Build-tool metadata is invalid; refreshing CMake configuration."
-                }
-            }
-            $toolChanged = -not $savedToolState -or
-                -not [string]::Equals($savedToolState.cmake_path, $cmakeExecutable, [StringComparison]::OrdinalIgnoreCase) -or
-                $savedToolState.cmake_version -ne $cmakeVersion -or
-                -not [string]::Equals($savedToolState.ninja_path, $ninjaExecutable, [StringComparison]::OrdinalIgnoreCase) -or
-                $savedToolState.ninja_version -ne $ninjaVersion
-            if ($toolChanged) {
-                Write-Host "go.ps1: Build tools changed; refreshing CMake configuration."
-                $needsConfigure = $true
-            }
-        }
-        if (-not $needsConfigure -and (Test-Path -LiteralPath $cmakeCache -PathType Leaf)) {
-            $cachedNinjaLine = Get-Content -LiteralPath $cmakeCache |
-                Where-Object { $_ -like 'CMAKE_MAKE_PROGRAM:*' } |
-                Select-Object -First 1
-            $cachedNinja = if ($cachedNinjaLine) { ($cachedNinjaLine -split '=', 2)[1] } else { $null }
-            if (-not $cachedNinja -or -not [string]::Equals(
-                    $cachedNinja.Replace('/', '\'),
-                    $ninjaExecutable.Replace('/', '\'),
-                    [StringComparison]::OrdinalIgnoreCase)) {
-                Write-Host "go.ps1: Updating CMake to use $ninjaExecutable"
-                $needsConfigure = $true
-            }
-        }
+        $configurationStatePath = Join-Path $buildDir 'swaptube-configure-state.json'
+        $savedConfigurationState = Read-JsonCache $configurationStatePath
+        $needsConfigure = -not (Test-Path -LiteralPath $buildNinja -PathType Leaf) -or
+            -not (Test-StateEqual $savedConfigurationState $configurationState)
         if ($needsConfigure) {
+            Write-Host 'go.ps1: Configuration inputs changed; refreshing CMake configuration.'
             Invoke-Native { & $cmakeExecutable @cmakeArgs } 1 'CMake configuration'
-            $toolState | ConvertTo-Json | Set-Content -LiteralPath $toolStatePath -Encoding UTF8
+            Write-JsonCache $configurationStatePath $configurationState
         }
         $jobs = [Environment]::ProcessorCount
         Invoke-Native { & $ninjaExecutable "-j$jobs" } 1 'Compilation'
