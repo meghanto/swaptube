@@ -305,19 +305,19 @@ VideoWriter::VideoWriter(AVFormatContext *fc_, const string& video_path, int vid
 }
 
 void VideoWriter::add_frame(uint32_t* device_pixels) {
-    bool live = rendering_on();
+    if (!is_for_real()) return; // Don't do anything in dev mode
 
     static auto last_print_time = chrono::steady_clock::time_point::min();
     auto now = chrono::steady_clock::now();
     if(terminal_preview_enabled() &&
-       (!live || last_print_time == chrono::steady_clock::time_point::min() || chrono::duration_cast<chrono::seconds>(now - last_print_time).count() >= 1)) {
+       (is_smoketest() || last_print_time == chrono::steady_clock::time_point::min() || chrono::duration_cast<chrono::seconds>(now - last_print_time).count() >= 1)) {
         Pixels p(get_video_dimensions_pixels());
         cuda_copy_pixels_to_host(p.pixels.data(), get_video_width_pixels() * get_video_height_pixels(), device_pixels);
         p.print_to_terminal();
         last_print_time = now;
     }
 
-    if (!live) return; // Don't encode video in smoketest
+    if (is_smoketest()) return; // Don't encode video in smoketest
 
     if (USE_LIVE) {
         live_player->accept_frame(device_pixels, false);

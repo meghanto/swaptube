@@ -12,8 +12,10 @@ using namespace std;
 #endif
 
 #include "Timer.h"
+#include "TimelinePlan.h"
 #include "Smoketest.h"
 #include "../IO/Writer.h"
+#include "../Scenes/Scene.h"
 #include "State/GlobalState.h"
 #include <filesystem>
 
@@ -48,11 +50,11 @@ private:
 
 void render_video(); // Forward declaration, provided by the user in their project file
 
-void parse_args(int argc, char* argv[], int& w, int& h, int& framerate, int& samplerate, bool& audio_hints, bool& audio_sfx) {
+void parse_args(int argc, char* argv[], int& w, int& h, int& framerate, int& samplerate, bool& include_audio, bool& audio_sfx, string& timeline_plan_path, bool& record_timeline_plan) {
     cout << "Parsing command line arguments... " << endl;
 
-    if (argc != 8) {
-        throw runtime_error("Expected 7 arguments: width height framerate samplerate output_dir smoketest/render audio_hints audio_sfx");
+    if (argc != 9) {
+        throw runtime_error("Expected 8 arguments: width height framerate samplerate smoketest/render include_audio audio_sfx timeline_plan_path");
     }
 
     if (sscanf(argv[1], "%d", &w) != 1 || w < 1 || w > 10000) {
@@ -80,8 +82,10 @@ void parse_args(int argc, char* argv[], int& w, int& h, int& framerate, int& sam
     string smoketest_arg = argv[5];
     if (smoketest_arg == "smoketest") {
         set_smoketest(true);
+        record_timeline_plan = true;
     } else if (smoketest_arg == "render") {
         set_smoketest(false);
+        record_timeline_plan = false;
     } else {
         throw runtime_error("Invalid smoketest flag argument: " + smoketest_arg);
     }
@@ -91,19 +95,25 @@ void parse_args(int argc, char* argv[], int& w, int& h, int& framerate, int& sam
         throw runtime_error("Video framerate must be divisible by audio sample rate.");
     }
 
-    int audio_hints_i;
-    if (sscanf(argv[6], "%d", &audio_hints_i) != 1 || (audio_hints_i != 0 && audio_hints_i != 1)) {
-        throw runtime_error("Invalid audio hints argument: " + string(argv[6]) );
+    int include_audio_i;
+    if (sscanf(argv[6], "%d", &include_audio_i) != 1 || (include_audio_i != 0 && include_audio_i != 1)) {
+        throw runtime_error("Invalid include audio argument: " + string(argv[6]) );
     }
-    audio_hints = (audio_hints_i != 0);
-    cout << "Audio Hints: " << (audio_hints ? "true" : "false") << ", " << flush;
+    include_audio = (include_audio_i != 0);
+    cout << "Include Audio: " << (include_audio ? "true" : "false") << ", " << flush;
 
     int audio_sfx_i;
     if (sscanf(argv[7], "%d", &audio_sfx_i) != 1 || (audio_sfx_i != 0 && audio_sfx_i != 1)) {
         throw runtime_error("Invalid audio sfx argument: " + string(argv[7]) );
     }
     audio_sfx = (audio_sfx_i != 0);
-    cout << "Audio SFX: " << (audio_sfx ? "true" : "false") << endl << endl;
+    cout << "Audio SFX: " << (audio_sfx ? "true" : "false") << ", " << flush;
+
+    timeline_plan_path = argv[8];
+    if (timeline_plan_path.empty()) {
+        throw runtime_error("Microblock plan path cannot be empty");
+    }
+    cout << "Microblock Counts: " << timeline_plan_path << endl << endl;
 }
 
 inline void signal_handler(int signal) {
@@ -123,17 +133,25 @@ int main(int argc, char* argv[]) {
 #endif
 
     int VIDEO_WIDTH, VIDEO_HEIGHT, FRAMERATE, SAMPLERATE;
-    bool AUDIO_HINTS, AUDIO_SFX;
-    parse_args(argc, argv, VIDEO_WIDTH, VIDEO_HEIGHT, FRAMERATE, SAMPLERATE, AUDIO_HINTS, AUDIO_SFX);
+    bool INCLUDE_AUDIO, AUDIO_SFX;
+    bool record_timeline_plan;
+    string timeline_plan_path;
+    parse_args(argc, argv, VIDEO_WIDTH, VIDEO_HEIGHT, FRAMERATE, SAMPLERATE, INCLUDE_AUDIO, AUDIO_SFX, timeline_plan_path, record_timeline_plan);
     Timer timer;
 
     // Main Render Loop
     signal(SIGINT, signal_handler);
     try {
         setup_output_subfolders();
-        init_writer(VIDEO_WIDTH, VIDEO_HEIGHT, FRAMERATE, SAMPLERATE, 0xff000044, AUDIO_HINTS, AUDIO_SFX);
-        cout << "Rendering video... " << endl;
+        init_writer(VIDEO_WIDTH, VIDEO_HEIGHT, FRAMERATE, SAMPLERATE, 0xff000044, INCLUDE_AUDIO, AUDIO_SFX);
+        initialize_timeline_plan(timeline_plan_path, record_timeline_plan);
+        if (is_smoketest()) {
+            cout << "Smoketesting video... " << endl;
+        } else {
+            cout << "Rendering video... " << endl;
+        }
         render_video();
+        finalize_timeline_plan();
     } catch(std::exception& e) {
         // Change to red text
         cout << "\033[1;31m";

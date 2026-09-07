@@ -34,6 +34,7 @@ set(SWAPTUBE_USE_CUDA OFF)
 set(SWAPTUBE_USE_HIP OFF)
 
 # Check HIP compiler first, as it's the more specific option
+# More likely to have a CUDA compiler with only HIP compute capability than vice versa
 if((CMAKE_HIP_COMPILER AND NOT COMPUTE_LANG) OR (COMPUTE_LANG STREQUAL "HIP"))
     message(STATUS "HIP compiler detected.")
     enable_language(HIP)
@@ -69,6 +70,9 @@ if((CMAKE_HIP_COMPILER AND NOT COMPUTE_LANG) OR (COMPUTE_LANG STREQUAL "HIP"))
     set(SWAPTUBE_USE_HIP ON)
     set(CMAKE_CONFIGURE_DEPENDS ${GPU_SOURCES})
     add_compile_options("-Wno-unused-value")
+    # for parity with CUDA default behavior
+    add_compile_options($<$<COMPILE_LANGUAGE:HIP>:-fgpu-rdc>)
+    add_link_options($<$<COMPILE_LANGUAGE:HIP>:-fgpu-rdc>)
 elseif((CMAKE_CUDA_COMPILER AND NOT COMPUTE_LANG) OR (COMPUTE_LANG STREQUAL "CUDA"))
     message(STATUS "CUDA compiler detected.")
     enable_language(CUDA)
@@ -77,10 +81,10 @@ elseif((CMAKE_CUDA_COMPILER AND NOT COMPUTE_LANG) OR (COMPUTE_LANG STREQUAL "CUD
     set(GPU_LANGUAGE CUDA)
     set(CMAKE_CUDA_STANDARD 17)
     set(CMAKE_CUDA_STANDARD_REQUIRED ON)
-    
+    # cmake_minimum_required is already 3.24, so "native" CUDA arch detection is
+    # always available here -- no version guard needed.
     set(CMAKE_CUDA_ARCHITECTURES native)
     message(STATUS "CUDA architecture target: native GPU")
-
     file(GLOB_RECURSE GPU_SOURCES "src/CUDA/*.cu")
     set(CMAKE_CONFIGURE_DEPENDS ${GPU_SOURCES})
     add_compile_options($<$<COMPILE_LANGUAGE:CUDA>:-Xcudafe> $<$<COMPILE_LANGUAGE:CUDA>:"--diag_suppress=20012">)

@@ -7,12 +7,14 @@
 #include "../Core/Pixels.h"
 #include "../Core/Macroblock.h"
 #include "../DataObjects/DevicePointer.h"
+#include "../IO/MidiWriter.h"
 #include <string>
 #include <iostream>
 #include <sstream>
 #include <iomanip>
 #include <cmath>
 #include <algorithm>
+#include <optional>
 #include <stdexcept>
 
 using namespace std;
@@ -22,11 +24,14 @@ extern int remaining_frames_in_macroblock;
 extern int total_microblocks_in_macroblock;
 extern int total_frames_in_macroblock;
 
-void stage_macroblock(const Macroblock& macroblock, int expected_microblocks_in_macroblock);
+void stage_macroblock(const Macroblock& macroblock);
+void stage_macroblock(const Macroblock& macroblock, int declared_microblocks_in_macroblock);
+void finalize_macroblock_sequence();
 
 class Scene {
 public:
     Scene(const vec2& dimensions = vec2(1, 1));
+    virtual ~Scene();
 
     virtual void draw() = 0;
 
@@ -51,22 +56,17 @@ public:
 
     StateManager manager;
 
-    void set_global_identifier(const string& id);
-
     virtual void change_data();
+
+    unordered_map<string, string> stage_publish_to_global;
 
 protected:
     DevicePointer gpu_pix;
     StateReturn state;
 
 private:
-    string global_identifier = ""; // This is prefixed before the published global state elements
-                                   // to uniquely identify this scene if necessary.
-                                   // Empty by default, meaning no state is published.
-
     bool has_updated_since_last_query = false;
 
-    virtual unordered_map<string, double> stage_publish_to_global() const { return unordered_map<string, double>(); }
     void publish_global();
 
     void render_one_frame(int microblock_frame_number, int scene_duration_frames);

@@ -1,4 +1,5 @@
 #include "Scene.h"
+#include "../Core/TimelinePlan.h"
 #include "../Core/Smoketest.h"
 #include "../IO/PNG.h"
 #include "../IO/Writer.h"
@@ -12,16 +13,54 @@ int remaining_frames_in_macroblock = 0;
 int total_microblocks_in_macroblock = 0;
 int total_frames_in_macroblock = 0;
 
-void stage_macroblock(const Macroblock& macroblock, int expected_microblocks_in_macroblock){
-    if (expected_microblocks_in_macroblock <= 0) {
-        throw runtime_error("ERROR: Staged a macroblock with non-positive microblock count. (" + to_string(expected_microblocks_in_macroblock) + " microblocks)");
+namespace {
+constexpr int smoketest_nominal_macroblock_frames = 10;
+Scene* last_smoketest_scene = nullptr;
+bool smoketest_macroblock_open = false;
+
+// During smoketest a macroblock closes at the next stage_macroblock() or at project end.
+void finish_deferred_macroblock() {
+    if (!smoketest_macroblock_open) return;
+    set_global_state("macroblock_number", get_global_state("macroblock_number") + 1);
+    if (last_smoketest_scene) last_smoketest_scene->on_end_transition(MACRO);
+    last_smoketest_scene = nullptr;
+    smoketest_macroblock_open = false;
+}
+
+void stage_macroblock_impl(const Macroblock& macroblock, const optional<int> declared_microblocks_in_macroblock) {
+    if (declared_microblocks_in_macroblock && *declared_microblocks_in_macroblock <= 0) {
+        throw runtime_error("ERROR: Staged a macroblock with non-positive microblock count. ("
+            + to_string(*declared_microblocks_in_macroblock) + " microblocks)");
     }
+
+    if (is_smoketest()) {
+        finish_deferred_macroblock();
+        const string macroblock_blurb = macroblock.blurb();
+        begin_macroblock_plan_entry(macroblock_blurb, declared_microblocks_in_macroblock);
+        smoketest_macroblock_open = true;
+        total_microblocks_in_macroblock = remaining_microblocks_in_macroblock = 0;
+        macroblock.write_shtooka();
+
+        get_writer().audio->encode_buffers();
+        macroblock.write_and_get_duration_frames();
+
+        total_frames_in_macroblock = remaining_frames_in_macroblock = smoketest_nominal_macroblock_frames;
+        cout << endl << macroblock_blurb << " staged for smoketesting." << endl;
+        return;
+    }
+
     if (remaining_microblocks_in_macroblock != 0) {
         throw runtime_error("ERROR: Attempted to add audio without having finished rendering video!\nYou probably forgot to use render_microblock()!\n"
                 "This macroblock had " + to_string(total_microblocks_in_macroblock) + " microblocks, "
                 "but render_microblock() was only called " + to_string(total_microblocks_in_macroblock - remaining_microblocks_in_macroblock) + " times.");
     }
 
+    const string macroblock_blurb = macroblock.blurb();
+
+    const int expected_microblocks_in_macroblock = begin_macroblock_plan_entry(
+        macroblock_blurb,
+        declared_microblocks_in_macroblock
+    );
     total_microblocks_in_macroblock = remaining_microblocks_in_macroblock = expected_microblocks_in_macroblock;
     cout << "Set remaining microblocks in macroblock to " << to_string(remaining_microblocks_in_macroblock) << endl;
     macroblock.write_shtooka();
@@ -33,31 +72,37 @@ void stage_macroblock(const Macroblock& macroblock, int expected_microblocks_in_
     cout << "Set total frames in macroblock to " << to_string(total_frames_in_macroblock) << ". We are " << (rendering_on() ? "rendering" : "smoketesting") << "." << endl;
     remaining_frames_in_macroblock = total_frames_in_macroblock;
 
-    cout << endl << macroblock.blurb() << " staged to last " << to_string(expected_microblocks_in_macroblock) << " microblock(s), " << to_string(total_frames_in_macroblock) << " frame(s)." << endl;
+    cout << endl << macroblock_blurb << " staged to last " << to_string(expected_microblocks_in_macroblock) << " microblock(s), " << to_string(total_frames_in_macroblock) << " frame(s)." << endl;
 
     double macroblock_length_seconds = static_cast<double>(total_frames_in_macroblock) / get_video_framerate_fps();
 
-    if (rendering_on() && get_writer().audio->audio_hints) { // Add hints for audio synchronization
-        double time = get_global_state("t");
-        double microblock_length_seconds = macroblock_length_seconds / expected_microblocks_in_macroblock;
-        int macroblock_length_samples = round(macroblock_length_seconds * get_audio_samplerate_hz());
-        int microblock_length_samples = round(microblock_length_seconds * get_audio_samplerate_hz());
-        get_writer().audio->add_blip(
-            round(time * get_audio_samplerate_hz()),
-            MACRO,
-            macroblock_length_samples,
-            microblock_length_samples
-        );
+    // Mark macroblock/microblock boundaries as their own MIDI tracks, for external tooling.
+    double time = get_global_state("t");
+    double microblock_length_seconds = macroblock_length_seconds / expected_microblocks_in_macroblock;
+    get_writer().midi->add_note("macroblock", time, 0);
+    for(int i = 0; i < expected_microblocks_in_macroblock; i++) {
+        get_writer().midi->add_note("microblock", time + i * microblock_length_seconds, 0);
+    }
+}
+}
 
-        for(int i = 0; i < expected_microblocks_in_macroblock; i++) {
-            get_writer().audio->add_blip(
-                round((time + i * microblock_length_seconds) * get_audio_samplerate_hz()),
-                MICRO,
-                macroblock_length_samples,
-                microblock_length_samples
-            );
-        }
-    } // Audio hints
+void stage_macroblock(const Macroblock& macroblock) {
+    stage_macroblock_impl(macroblock, nullopt);
+}
+
+void stage_macroblock(const Macroblock& macroblock, const int declared_microblocks_in_macroblock) {
+    stage_macroblock_impl(macroblock, declared_microblocks_in_macroblock);
+}
+
+void finalize_macroblock_sequence() {
+    if (is_smoketest()) {
+        finish_deferred_macroblock();
+    } else if (remaining_microblocks_in_macroblock != 0) {
+        throw runtime_error("ERROR: Project ended before finishing its final macroblock. This macroblock had "
+            + to_string(total_microblocks_in_macroblock) + " microblocks, but render_microblock() was only called "
+            + to_string(total_microblocks_in_macroblock - remaining_microblocks_in_macroblock) + " times.");
+    }
+    finalize_timeline_plan();
 }
 
 Scene::Scene(const vec2& dimensions) : gpu_pix(floor(get_video_dimensions_pixels() * dimensions)) {
@@ -65,6 +110,10 @@ Scene::Scene(const vec2& dimensions) : gpu_pix(floor(get_video_dimensions_pixels
         {"w", to_string(dimensions.x)},
         {"h", to_string(dimensions.y)}
     });
+}
+
+Scene::~Scene() {
+    if (last_smoketest_scene == this) last_smoketest_scene = nullptr;
 }
 
 void Scene::on_end_transition(const TransitionType tt) {
@@ -98,6 +147,16 @@ uint32_t* Scene::query() {
 }
 
 void Scene::render_microblock(){
+    if (is_smoketest()) {
+        record_planned_microblock();
+        render_one_frame(0, 1);
+        remaining_frames_in_macroblock = max(0, remaining_frames_in_macroblock);
+        last_smoketest_scene = this;
+        set_global_state("microblock_number", get_global_state("microblock_number") + 1);
+        on_end_transition(MICRO);
+        return;
+    }
+
     cout << "{" << flush;
     if (remaining_microblocks_in_macroblock == 0) {
         throw runtime_error("ERROR: Attempted to render video, without having added audio first!\nYou probably forgot to stage_macroblock()!\nOr perhaps you staged too few microblocks- " + to_string(total_microblocks_in_macroblock) + " were staged, but there should have been more.");
@@ -137,7 +196,7 @@ void Scene::render_microblock(){
 void Scene::update_state() {
     manager.evaluate_all();
     state = manager.get_state();
-    if(global_identifier.size() > 0) publish_global();
+    publish_global();
 }
 
 int Scene::get_width() {
@@ -175,20 +234,10 @@ void Scene::export_frame(const string& filename, int scaledown) {
     pix_to_png(pix.naive_scale_down(scaledown), "io_out/frames/frame_"+filename+".png");
 }
 
-void Scene::set_global_identifier(const string& id){
-    // What we are actually here to do
-    global_identifier = id;
-
-    // We also need to publish it immediately, or else it may not be present on the first frame
-    // of something trying to read from global, since global ordering is not guaranteed.
-    // Update_state does this for us.
-    update_state();
-}
-
 void Scene::publish_global() {
-    const unordered_map<string, double>& s = stage_publish_to_global();
-    for(const auto& p : s) {
-        set_global_state(global_identifier + "." + p.first, p.second);
+    for (const auto& [scene_var, global_var] : stage_publish_to_global) {
+        if (!state.contains(scene_var)) continue;
+        set_global_state(global_var, state[scene_var]);
     }
 }
 
@@ -206,6 +255,8 @@ void Scene::render_one_frame(int microblock_frame_number, int scene_duration_fra
     remaining_frames_in_macroblock--;
     set_global_state("frame_number", get_global_state("frame_number") + 1);
     set_global_state("t", get_global_state("frame_number") / get_video_framerate_fps());
+    // Capture MIDI state from global vars
+    get_writer().midi->capture_global_state();
     cout << "]" << flush;
 }
 

@@ -72,12 +72,16 @@ bool StateManager::contains(const string& varname) const {
 
 void StateManager::print_state() const {
     /* Print out all variable names alphabetically along with their current value and their computation status. */
-    // TODO alphabeticalize
     cout << "Variables:" << endl;
     cout << "-----------------------" << endl;
+    vector<string> keys;
     for (const auto& variable : variables) {
-        const VariableContents& vc = variable.second;
-        cout << left << setw(32) << variable.first
+        keys.push_back(variable.first);
+    }
+    sort(keys.begin(), keys.end());
+    for (const string& key : keys) {
+        const VariableContents& vc = variables.at(key);
+        cout << left << setw(32) << key
              << setw(38) << vc.equation.to_string()
              << " : " << setw(10) << vc.value
              << (vc.fresh ? " (Fresh)" : " (Stale)")
@@ -127,6 +131,15 @@ void StateManager::remove(const string& variable) {
      */
     last_compute_order.clear();
     variables.erase(variable);
+    // If in each transition set, remove it from that transition set and remove the post_transition variable if it exists
+    if(in_microblock_transition.find(variable) != in_microblock_transition.end()){
+        in_microblock_transition.erase(variable);
+        variables.erase(variable + ".post_transition");
+    }
+    if(in_macroblock_transition.find(variable) != in_macroblock_transition.end()){
+        in_macroblock_transition.erase(variable);
+        variables.erase(variable + ".post_transition");
+    }
 }
 void StateManager::remove(const unordered_set<string>& equations) {
     for(const string& varname : equations){
