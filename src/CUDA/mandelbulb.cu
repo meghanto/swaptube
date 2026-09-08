@@ -4,7 +4,10 @@
 #include "common_graphics.cuh"
 #include "fractal_sdf.cuh"
 
-const float EPSILON = 1e-4f;
+// A plain `const float` at file scope isn't visible from device code under
+// MSVC's nvcc host compiler (unlike nvcc+gcc on Linux) even with
+// --expt-relaxed-constexpr; a macro sidesteps host/device visibility entirely.
+#define EPSILON 1e-4f
 
 __device__ unsigned int getLighting(const Cuda::vec3& pos, const Cuda::vec3& lightPos, const Cuda::vec3& normal, float shadow, float iters, float max_raymarch_iters){
     float light = fmaxf(dot(normal, normalize(lightPos - pos)), 0.25);

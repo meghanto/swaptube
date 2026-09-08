@@ -5,8 +5,11 @@
 #include "complex_functions.cuh"
 #include <stdio.h>
 
-const float EPSILON = 2e-4f;
-const float MAXITERS = 50;
+// A plain `const float` at file scope isn't visible from device code under
+// MSVC's nvcc host compiler (unlike nvcc+gcc on Linux) even with
+// --expt-relaxed-constexpr; a macro sidesteps host/device visibility entirely.
+#define EPSILON 2e-4f
+#define MAXITERS 50
 
 __device__ uint32_t getColor(){
     return 0xffffffff;

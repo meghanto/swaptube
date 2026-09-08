@@ -518,7 +518,14 @@ try {
         ConfigurationFiles = $configurationFiles
     }
 
-    Remove-Item -LiteralPath $ioIn, $ioOut -Recurse -Force -ErrorAction SilentlyContinue
+    Remove-Item -LiteralPath $ioIn -Recurse -Force -ErrorAction SilentlyContinue
+    if (-not $SkipSmoketest) {
+        # A fresh smoketest will regenerate microblock_counts.txt, so a full wipe
+        # is safe. When skipping the smoketest (-n), io_out must be left alone --
+        # the render reads a microblock_counts.txt that only a prior smoketest run
+        # (a separate invocation) could have produced.
+        Remove-Item -LiteralPath $ioOut -Recurse -Force -ErrorAction SilentlyContinue
+    }
     New-Item -ItemType Directory -Force -Path $ioIn, (Join-Path $ioOut 'frames') | Out-Null
     Copy-Item -Path (Join-Path $inputDir '*') -Destination $ioIn -Recurse -Force -ErrorAction SilentlyContinue
 
@@ -540,13 +547,17 @@ try {
 
         $audioHintsValue = [int]$AudioHints.IsPresent
         $audioSfxValue = [int]$AudioSfx.IsPresent
+        # Main.cpp now requires exactly 8 positional args, the last being a path
+        # where the smoketest records (and the render reads back) per-macroblock
+        # frame counts -- mirrors upstream/go.sh's $MICROBLOCK_COUNTS_PATH.
+        $microblockCountsPath = Join-Path $ioOut 'microblock_counts.txt'
         if (-not $SkipSmoketest) {
-            Invoke-Native { & .\swaptube.exe 160 90 $Framerate $sampleRate smoketest $audioHintsValue $audioSfxValue } 2 'Smoketest'
+            Invoke-Native { & .\swaptube.exe 160 90 $Framerate $sampleRate smoketest $audioHintsValue $audioSfxValue $microblockCountsPath } 2 'Smoketest'
         }
         if (-not $SmoketestOnly) {
-            Remove-Item -Path (Join-Path $ioOut '*') -Recurse -Force -ErrorAction SilentlyContinue
+            Remove-Item -Path (Join-Path $ioOut '*') -Recurse -Force -ErrorAction SilentlyContinue -Exclude 'microblock_counts.txt'
             New-Item -ItemType Directory -Force -Path (Join-Path $ioOut 'frames') | Out-Null
-            Invoke-Native { & .\swaptube.exe $VideoWidth $VideoHeight $Framerate $sampleRate render $audioHintsValue $audioSfxValue } 2 'Render' -Interactive:($ProjectName -eq 'UIDemo')
+            Invoke-Native { & .\swaptube.exe $VideoWidth $VideoHeight $Framerate $sampleRate render $audioHintsValue $audioSfxValue $microblockCountsPath } 2 'Render' -Interactive:($ProjectName -eq 'UIDemo')
         }
     } finally {
         Pop-Location
@@ -569,8 +580,17 @@ try {
     if ($outputDir -and (Test-Path -LiteralPath $ioOut -PathType Container)) {
         Copy-Item -Path (Join-Path $ioOut '*') -Destination $outputDir -Recurse -Force -ErrorAction SilentlyContinue
     }
-    if ($ioIn -or $ioOut) {
-        Remove-Item -LiteralPath @($ioIn, $ioOut) -Recurse -Force -ErrorAction SilentlyContinue
+    if ($ioIn) {
+        Remove-Item -LiteralPath $ioIn -Recurse -Force -ErrorAction SilentlyContinue
+    }
+    if ($ioOut) {
+        if ($SmoketestOnly) {
+            # A -SmoketestOnly (-s) run exists specifically to leave microblock_counts.txt
+            # behind for a later -SkipSmoketest (-n) render invocation to read.
+            Remove-Item -Path (Join-Path $ioOut '*') -Recurse -Force -ErrorAction SilentlyContinue -Exclude 'microblock_counts.txt'
+        } else {
+            Remove-Item -LiteralPath $ioOut -Recurse -Force -ErrorAction SilentlyContinue
+        }
     }
     if ($temporaryProjectCopied -and (Test-Path -LiteralPath $activeProject -PathType Leaf)) {
         Move-Item -LiteralPath $activeProject -Destination $outputDir -Force
